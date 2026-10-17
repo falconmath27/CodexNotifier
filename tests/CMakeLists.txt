@@ -20,3 +20,8 @@ target_link_libraries(dimepenny_domain_tests PRIVATE DimePenny::Core)
 dimepenny_enable_warnings(dimepenny_domain_tests)
 add_test(NAME dimepenny.domain.models COMMAND dimepenny_domain_tests)
 
+add_executable(dimepenny_state_machine_tests unit/agent_state_machine_test.cpp)
+target_link_libraries(dimepenny_state_machine_tests PRIVATE DimePenny::Core)
+dimepenny_enable_warnings(dimepenny_state_machine_tests)
+add_test(NAME dimepenny.domain.state_machine COMMAND dimepenny_state_machine_tests)
+

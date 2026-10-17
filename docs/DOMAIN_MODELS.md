@@ -10,7 +10,7 @@ Include them through the existing `DimePenny::Core` CMake target.
 | `ProjectInfo` | Required display name and absolute native filesystem path. No existence checks or path rewriting; the integration layer will verify access and canonical paths. |
 | `PetIdentity` | Required ID, display name, appearance key and RGB color. The future registry will enforce uniqueness across sessions. |
 | `AgentState` | Eight planned lifecycle states with stable display names through `toString`. |
-| `Session` | Owns its ID, project and pet values, terminal type, creation timestamp, optional Codex ID and optional positive process ID. Starts `Unregistered`. No unrestricted state setter. |
+| `Session` | Owns its ID, project and pet values, terminal type, creation timestamp, optional Codex ID and optional positive process ID. Starts `Unregistered`. Only `AgentStateMachine` changes its lifecycle fields. |
 | `AgentEvent` | Required event ID, target session, type and occurrence timestamp; optional source sequence and validated approval correlation metadata. |
 
 Constructors throw `std::invalid_argument` for invalid data. Text fields reject
@@ -25,8 +25,9 @@ approval metadata. This models correlation only, not approval delivery or execut
 
 Timestamps are supplied by the caller (`std::chrono::system_clock::time_point`),
 making tests deterministic. Sequence numbers may begin at zero; missing means
-unknown. Ordering, connection generations, replay detection, event persistence,
-JSON serialization and state transitions are later tasks. Constructors do not
+unknown. The [state machine](STATE_MACHINE.md) now enforces transitions, timestamp
+and sequence ordering, and in-memory duplicate detection. Connection generations,
+event persistence and JSON serialization are later tasks. Constructors do not
 claim to validate ordering or global uniqueness. PID is metadata, never identity.
 
 ## Verification

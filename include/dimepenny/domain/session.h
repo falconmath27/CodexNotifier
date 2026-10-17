@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <unordered_set>
 
 namespace dimepenny {
 
@@ -39,6 +40,7 @@ public:
     [[nodiscard]] AgentState state() const noexcept { return state_; }
 
 private:
+    friend class AgentStateMachine;
     SessionId id_;
     ProjectInfo project_;
     PetIdentity pet_;
@@ -46,8 +48,12 @@ private:
     Timestamp createdAt_;
     std::optional<std::string> codexSessionId_;
     std::optional<std::uint32_t> processId_;
-    // Task 3 will introduce validated transitions. Construction never implies connectivity.
+    // Only AgentStateMachine can mutate lifecycle state and its ordering metadata.
     AgentState state_{AgentState::Unregistered};
+    std::optional<Timestamp> lastEventAt_;
+    std::optional<std::uint64_t> lastSequence_;
+    std::optional<std::string> pendingApprovalId_;
+    std::unordered_set<std::string> acceptedEventIds_;
 };
 
 }  // namespace dimepenny

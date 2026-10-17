@@ -33,9 +33,10 @@ The proposed first release is local and Windows-first: one persistent Qt desktop
 | Bridge executable | `dimepenny_bridge` prints its name/version and exits | Scaffold |
 | Core library | `dimepenny_core` exposes the generated application name and version | Implemented |
 | Domain models | Session identity, project and pet metadata, lifecycle states and typed events; see [model contracts](docs/DOMAIN_MODELS.md) | Implemented |
-| Automated checks | `dimepenny.core.smoke` verifies metadata; `dimepenny.domain.models` checks domain validation and identity | 2 CTest targets |
+| State machine | Validated transitions, event ordering, duplicate detection and approval correlation; see [transition rules](docs/STATE_MACHINE.md) | Implemented |
+| Automated checks | Metadata smoke test, domain model checks, and every state/event combination | 3 CTest targets |
 | Sessions and pets | Register up to 10 sessions and map each to a stable visual identity | Planned |
-| Lifecycle and approvals | Validate session events and route decisions to the exact request | Planned |
+| Approval integration | Deliver decisions and enforce expiry through the bridge | Planned |
 | Persistence | Store session history and pet assignments in SQLite | Planned |
 | Context linking | Build a reviewable brief from explicitly selected projects | Later phase |
 

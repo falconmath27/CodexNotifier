@@ -1,0 +1,71 @@
+# CMake build directories
+/build/
+/build-*/
+/out/
+/cmake-build-*/
+
+# CMake-generated files
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+compile_commands.json
+install_manifest.txt
+Makefile
+Testing/
+_deps/
+
+# Compiled C/C++ artifacts
+*.a
+*.dll
+*.dylib
+*.exe
+*.exp
+*.ilk
+*.lib
+*.o
+*.obj
+*.pdb
+*.so
+
+# Qt-generated files
+.qmake.stash
+*.pro.user
+*.pro.user.*
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# IDE and editor state
+.idea/
+.vs/
+.vscode/
+*.code-workspace
+*.sln
+*.suo
+*.user
+*.userosscache
+*.VC.db
+*.VC.opendb
+
+# Runtime and local application data
+/data/
+/logs/
+/runtime/
+*.db-journal
+*.db-shm
+*.db-wal
+*.log
+
+# Temporary files
+/tmp/
+*.bak
+*.swp
+*.tmp
+~$*
+
+# Operating-system metadata
+.DS_Store
+Desktop.ini
+Thumbs.db
+

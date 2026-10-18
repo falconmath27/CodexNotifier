@@ -30,3 +30,14 @@ target_link_libraries(dimepenny_registry_tests PRIVATE DimePenny::Core)
 dimepenny_enable_warnings(dimepenny_registry_tests)
 add_test(NAME dimepenny.domain.registry COMMAND dimepenny_registry_tests)
 
+add_executable(dimepenny_protocol_tests unit/ipc_protocol_test.cpp)
+target_link_libraries(dimepenny_protocol_tests PRIVATE DimePenny::Core)
+dimepenny_enable_warnings(dimepenny_protocol_tests)
+add_test(NAME dimepenny.ipc.protocol COMMAND dimepenny_protocol_tests)
+
+add_executable(dimepenny_server_tests integration/local_server_test.cpp)
+target_link_libraries(dimepenny_server_tests PRIVATE DimePenny::Core Qt6::Test)
+dimepenny_enable_warnings(dimepenny_server_tests)
+add_test(NAME dimepenny.ipc.server COMMAND dimepenny_server_tests)
+set_tests_properties(dimepenny.ipc.server PROPERTIES TIMEOUT 45)
+

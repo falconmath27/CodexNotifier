@@ -34,7 +34,9 @@ The proposed first release is local and Windows-first: one persistent Qt desktop
 | Core library | `dimepenny_core` exposes the generated application name and version | Implemented |
 | Domain models | Session identity, project and pet metadata, lifecycle states and typed events; see [model contracts](docs/DOMAIN_MODELS.md) | Implemented |
 | State machine | Validated transitions, event ordering, duplicate detection and approval correlation; see [transition rules](docs/STATE_MACHINE.md) | Implemented |
-| Automated checks | Metadata, domain models, state/event combinations, and registry lifecycle checks | 4 CTest targets |
+| Automated checks | Metadata, domain models, state/event combinations, registry, IPC codec and local socket integration | 6 CTest targets |
+| Local IPC server | Authenticated session binding, concurrent local sockets and liveness deadlines; see [server contracts](docs/LOCAL_SERVER.md) | Implemented component |
+| IPC protocol | Versioned JSON validation, bounded length-prefixed frames and incremental decoding; see [wire contract](docs/IPC_PROTOCOL.md) | Implemented |
 | Session registry | Up to 10 enabled sessions, duplicate protection and stable pet assignments; see [registry contracts](docs/SESSION_REGISTRY.md) | Implemented |
 | Desktop pets | Render and animate the assigned pet identities | Planned |
 | Approval integration | Deliver decisions and enforce expiry through the bridge | Planned |

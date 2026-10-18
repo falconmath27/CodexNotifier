@@ -54,7 +54,7 @@ This diagram reflects the committed CMake targets and link dependencies:
 
 ```mermaid
 flowchart LR
-    app["dimepenny_app<br/>Qt Widgets placeholder"]
+    app["dimepenny_app<br/>Qt Quick/QML interface"]
     bridge["dimepenny_bridge<br/>Console scaffold"]
     tests["dimepenny_core_tests<br/>Metadata smoke test"]
     core["dimepenny_core<br/>Shared application metadata"]
@@ -63,7 +63,7 @@ flowchart LR
     bridge --> core
     tests --> core
     core --> qtcore["Qt6::Core"]
-    app --> appqt["Qt6::Network · Qt6::Sql · Qt6::Widgets"]
+    app --> appqt["Qt6::Network · Qt6::Sql · Qt6::Quick"]
     bridge --> qtnetwork["Qt6::Network"]
     tests --> qttest["Qt6::Test"]
 ```
@@ -91,7 +91,7 @@ Domain state is intended to remain independent of widgets, sockets, and SQL. The
 | Area | Technology | Purpose |
 |---|---|---|
 | Language | C++20 | Current application, bridge, and core targets |
-| Desktop UI | Qt 6 Widgets | Current placeholder window; future pet windows |
+| Desktop UI | Qt Quick/QML + Fluent controls | Activation, session details, menus and desktop pet windows |
 | Local runtime | Qt Core and Qt Network | Event loop now; local IPC is planned |
 | Persistence dependency | Qt SQL | Linked by the app, but not used by repository code yet |
 | Build | CMake 3.24+ | Target configuration and generated build metadata |
@@ -101,7 +101,7 @@ Domain state is intended to remain independent of widgets, sockets, and SQL. The
 
 ```text
 .
-├── app/                    # Qt Widgets application scaffold
+├── app/                    # QML screens and C++ presentation adapters
 ├── bridge/                 # Per-session bridge scaffold
 ├── cmake/                  # Generated build metadata template
 ├── include/dimepenny/      # Public core headers
@@ -123,7 +123,7 @@ Domain state is intended to remain independent of widgets, sockets, and SQL. The
 - CMake 3.24 or newer
 - A C++20 compiler
 - Ninja or another CMake-supported generator
-- Qt 6 with the `Core`, `Network`, `Sql`, `Widgets`, and `Test` modules
+- Qt 6.8 or newer with `Core`, `Network`, `Sql`, `Quick`, `QuickControls2`, `Test`, and the QML Dialogs and FluentWinUI3 modules (verified with Qt 6.11.1)
 
 Use a single, compatible compiler and Qt toolchain. For an MSYS2 UCRT64 setup, install the required packages from an **MSYS2 UCRT64 terminal**:
 
@@ -131,7 +131,8 @@ Use a single, compatible compiler and Qt toolchain. For an MSYS2 UCRT64 setup, i
 pacman -S --needed \
   mingw-w64-ucrt-x86_64-cmake \
   mingw-w64-ucrt-x86_64-ninja \
-  mingw-w64-ucrt-x86_64-qt6-base
+  mingw-w64-ucrt-x86_64-qt6-base \
+  mingw-w64-ucrt-x86_64-qt6-declarative
 ```
 
 ### Clone, configure, and build
@@ -153,7 +154,7 @@ To enforce warnings as errors during development, add `-DDIMEPENNY_WARNINGS_AS_E
 ctest --test-dir build --output-on-failure
 ```
 
-The current suite contains one test, `dimepenny.core.smoke`, which checks that CMake generated the project name `DimePenny` and version `0.1.0` correctly.
+The suite contains 14 CTest targets covering metadata, domain models, state transitions, registry rules, IPC, simulated bridges, event processing, activation, and desktop pet windows. IPC tests require permission to open local named pipes. UI tests use Qt's offscreen platform.
 
 ### Run the executables
 
@@ -162,15 +163,40 @@ The current suite contains one test, `dimepenny.core.smoke`, which checks that C
 ./build/bridge/DimePennyBridge.exe --demo
 ```
 
-`DimePenny.exe` opens the placeholder Qt window. `DimePennyBridge.exe --demo` starts an isolated server, authenticates a fake session, sends lifecycle events and exits.
+`DimePenny.exe` opens the activation interface. Enter an agent name, browse to an existing project directory, select terminal metadata and an unused pet appearance, then activate a simulated session. The UI shows validation, connection state and the 10-session capacity. A disconnected session keeps its slot and appearance; select its row to reconnect. Registrations last for the app's lifetime and are not yet persisted.
+
+Activation uses an in-process simulated bridge over authenticated local IPC; it does not launch a terminal or control Codex. Agent names are stored as the pet's display name in the existing registration protocol. Appearance choices reserve identities; animated pets are not rendered yet.
+
+### Desktop pets (Task 10)
+
+Each registered session gets one transparent, frameless, always-on-top tool window. This milestone renders a static paw badge with the agent name, appearance key, and live state—not an animated animal sprite.
+
+- Drag with the left mouse button. Positions stay inside a monitor's available work area, including monitors with negative coordinates. Display/work-area changes bring misplaced pets back on screen.
+- With keyboard focus, use arrow keys to move 10 pixels or Shift + arrow for 1 pixel.
+- Hover for session information. Double-click or press Enter for a non-modal details window that updates with the session.
+- Right-click or press Shift+F10 for details, open project folder, reconnect a disconnected session, toggle always-on-top, reset position, show activation, or hide the pet.
+- Hiding or closing a pet does not deactivate its session. Choose **Show pet** on its session in activation to restore it. Reconnect preserves the existing pet window and position.
+- Positions are kept only while the app runs; persistence and animated appearances remain future tasks. Closing the activation application ends its pet windows and simulated connections.
+
+Automated tests cover flags, alpha transparency, drag/keyboard positioning, bounds, menu actions, details updates, session isolation, ownership, and activation/reconnect integration. A real multi-monitor Windows check is still recommended for compositor stacking, taskbar avoidance, monitor unplugging, and mixed-DPI behavior.
+
+### Qt Quick presentation
+
+The app uses QGuiApplication and QQuickView; it no longer links Qt Widgets. The screens in `app/qml/Activation.qml` and `app/qml/Pet.qml` are embedded in the executable through `app/ui.qrc`. Qt Quick Controls use FluentWinUI3 with an explicit light theme. The C++ presentation adapters expose properties and commands to QML; EventProcessor and the domain remain responsible for authenticated state changes.
+
+Pet windows are independent top-level tool windows owned by the activation controller, so minimizing activation does not minimize the pets. Closing activation stops the local server and hides all pets. The details window and folder picker are QML too. Sprite animation and position persistence remain separate milestones.
+
+For deployment, include the QML runtime and imports as well as Qt libraries. Run the matching Qt toolchain's `windeployqt` with `--qmldir app/qml` against the executable in a staging folder; a CMake install alone is not a standalone installer.
+
+`DimePennyBridge.exe --demo` starts an isolated server, authenticates a fake session, sends lifecycle events and exits.
 
 Run the executables from the same UCRT64 terminal used for the build so the matching Qt runtime directory remains on `PATH`.
 
 ## Development status
 
-Version `0.1.0` includes domain and IPC components plus a fake-session demo. Real Codex integration, desktop pets, SQLite storage and approval execution remain planned.
+Version `0.1.0` includes domain and IPC components, a fake-session demo, the activation interface, and static desktop pet windows. Real Codex integration, animated pets, SQLite storage and approval execution remain planned.
 
-The next functional acceptance target in [PLAN.md](PLAN.md) is a simulated session registry that can register sessions safely, enforce the 10-session limit, reject duplicate identities, and assign stable pet identities. Later milestones add IPC, Qt pet windows, concurrency, persistence, verified Codex lifecycle events, and approval handling.
+The implemented registry enforces the 10-session limit, rejects duplicate identities, and assigns stable pet identities. Later milestones in [PLAN.md](PLAN.md) add animation, persistence, verified Codex lifecycle events, and approval handling.
 
 ## Contributing
 

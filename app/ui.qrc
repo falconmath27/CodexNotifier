@@ -1,0 +1,4 @@
+<RCC><qresource prefix="/qml">
+  <file alias="Activation.qml">qml/Activation.qml</file>
+  <file alias="Pet.qml">qml/Pet.qml</file>
+</qresource></RCC>

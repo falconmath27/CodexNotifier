@@ -59,3 +59,15 @@ dimepenny_enable_warnings(dimepenny_event_processor_tests)
 add_test(NAME dimepenny.application.events COMMAND dimepenny_event_processor_tests)
 set_tests_properties(dimepenny.application.events PROPERTIES TIMEOUT 30)
 
+add_executable(dimepenny_activation_tests integration/activation_window_test.cpp)
+target_link_libraries(dimepenny_activation_tests PRIVATE dimepenny_ui Qt6::Test)
+dimepenny_enable_warnings(dimepenny_activation_tests)
+add_test(NAME dimepenny.ui.activation COMMAND dimepenny_activation_tests)
+set_tests_properties(dimepenny.ui.activation PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=FluentWinUI3")
+
+add_executable(dimepenny_pet_tests integration/pet_window_test.cpp)
+target_link_libraries(dimepenny_pet_tests PRIVATE dimepenny_ui Qt6::Test)
+dimepenny_enable_warnings(dimepenny_pet_tests)
+add_test(NAME dimepenny.ui.pet COMMAND dimepenny_pet_tests)
+set_tests_properties(dimepenny.ui.pet PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=FluentWinUI3")
+

@@ -17,7 +17,7 @@ set(CMAKE_AUTOUIC ON)
 
 option(DIMEPENNY_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Network Sql Widgets)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Network Sql Quick QuickControls2)
 
 function(dimepenny_enable_warnings target_name)
     if(MSVC)

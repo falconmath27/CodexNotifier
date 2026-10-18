@@ -25,3 +25,8 @@ target_link_libraries(dimepenny_state_machine_tests PRIVATE DimePenny::Core)
 dimepenny_enable_warnings(dimepenny_state_machine_tests)
 add_test(NAME dimepenny.domain.state_machine COMMAND dimepenny_state_machine_tests)
 
+add_executable(dimepenny_registry_tests unit/session_registry_test.cpp)
+target_link_libraries(dimepenny_registry_tests PRIVATE DimePenny::Core)
+dimepenny_enable_warnings(dimepenny_registry_tests)
+add_test(NAME dimepenny.domain.registry COMMAND dimepenny_registry_tests)
+

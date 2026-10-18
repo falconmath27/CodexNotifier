@@ -25,6 +25,10 @@ Error to Connecting. Other source states reject it. A successful bridge handshak
 is represented by SessionConnected. Recovering from Error requires this handshake;
 TaskStarted cannot silently clear an error.
 
+The local `deactivate(session)` command moves any state to Disconnected and clears
+pending approvals without changing accepted-event history or ordering watermarks.
+SessionRegistry uses it to deactivate registrations and release their capacity slots.
+
 ApprovalResolved must match the pending request ID. Either decision resumes Working:
 this describes the agent processing the decision, not permission to execute a denied
 operation. Expiry, operation cancellation and decision delivery belong to the later

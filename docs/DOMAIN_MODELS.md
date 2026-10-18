@@ -8,7 +8,7 @@ Include them through the existing `DimePenny::Core` CMake target.
 |---|---|
 | `SessionId` | Required opaque registration ID; 1-128 ASCII letters, digits, `_`, `-`, `.`, `:`. Case-sensitive equality, ordering and `std::hash` support. No implicit string conversion or ID generation. |
 | `ProjectInfo` | Required display name and absolute native filesystem path. No existence checks or path rewriting; the integration layer will verify access and canonical paths. |
-| `PetIdentity` | Required ID, display name, appearance key and RGB color. The future registry will enforce uniqueness across sessions. |
+| `PetIdentity` | Required ID, display name, appearance key and RGB color. SessionRegistry enforces unique pet IDs and appearance-key/color pairs across retained registrations. |
 | `AgentState` | Eight planned lifecycle states with stable display names through `toString`. |
 | `Session` | Owns its ID, project and pet values, terminal type, creation timestamp, optional Codex ID and optional positive process ID. Starts `Unregistered`. Only `AgentStateMachine` changes its lifecycle fields. |
 | `AgentEvent` | Required event ID, target session, type and occurrence timestamp; optional source sequence and validated approval correlation metadata. |

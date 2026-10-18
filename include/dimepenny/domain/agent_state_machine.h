@@ -17,6 +17,13 @@ enum class TransitionResult {
 
 class AgentStateMachine final {
 public:
+    // Local deactivation is independent of the bridge's event sequence.
+    static void deactivate(Session& session) noexcept
+    {
+        session.pendingApprovalId_.reset();
+        session.state_ = AgentState::Disconnected;
+    }
+
     // Local connection intent, not a claim that a bridge has connected.
     [[nodiscard]] static TransitionResult beginConnecting(Session& session) noexcept
     {

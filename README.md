@@ -34,8 +34,9 @@ The proposed first release is local and Windows-first: one persistent Qt desktop
 | Core library | `dimepenny_core` exposes the generated application name and version | Implemented |
 | Domain models | Session identity, project and pet metadata, lifecycle states and typed events; see [model contracts](docs/DOMAIN_MODELS.md) | Implemented |
 | State machine | Validated transitions, event ordering, duplicate detection and approval correlation; see [transition rules](docs/STATE_MACHINE.md) | Implemented |
-| Automated checks | Metadata smoke test, domain model checks, and every state/event combination | 3 CTest targets |
-| Sessions and pets | Register up to 10 sessions and map each to a stable visual identity | Planned |
+| Automated checks | Metadata, domain models, state/event combinations, and registry lifecycle checks | 4 CTest targets |
+| Session registry | Up to 10 enabled sessions, duplicate protection and stable pet assignments; see [registry contracts](docs/SESSION_REGISTRY.md) | Implemented |
+| Desktop pets | Render and animate the assigned pet identities | Planned |
 | Approval integration | Deliver decisions and enforce expiry through the bridge | Planned |
 | Persistence | Store session history and pet assignments in SQLite | Planned |
 | Context linking | Build a reviewable brief from explicitly selected projects | Later phase |

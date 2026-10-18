@@ -33,11 +33,12 @@ secret stays valid across reconnects until revoke, rotation, or server shutdown.
 `revoke` invalidates the credential and disconnects that session. `stop` closes
 all connections, clears credentials and stops the listener/timer.
 
-Transport registration_result currently acknowledges authenticated transport
-admission, not SessionRegistry mutation. The future composition layer must
-coordinate domain admission before exposing successful activation to users. This
-component does not invent verified Codex events or update pets. It exposes
-messageReceived/sessionDisconnected for the later event-dispatch integration.
+When composed through EventProcessor (Task 8), the registration handler checks
+SessionRegistry admission before sending accepted=true. Bare LocalServer instances
+without a handler still acknowledge transport admission only. Install the handler
+before listening. authenticatedMessage carries the socket's independent session
+binding; EventProcessor uses it for dispatch and handles sessionDisconnected to
+mark the affected domain session disconnected. See [event processing](EVENT_PROCESSING.md).
 
 ## Limits and liveness
 

@@ -30,11 +30,12 @@ The proposed first release is local and Windows-first: one persistent Qt desktop
 |---|---|---|
 | Build foundation | CMake configures C++20, generated version metadata, warnings, installation, and CTest | Implemented |
 | Desktop executable | `dimepenny_app` opens a 480×220 Qt placeholder window | Scaffold |
-| Bridge executable | `dimepenny_bridge` prints its name/version and exits | Scaffold |
+| Bridge executable | Fake-session client with lifecycle and fault scenarios; see [simulator guide](docs/SIMULATED_BRIDGE.md) | Implemented |
 | Core library | `dimepenny_core` exposes the generated application name and version | Implemented |
 | Domain models | Session identity, project and pet metadata, lifecycle states and typed events; see [model contracts](docs/DOMAIN_MODELS.md) | Implemented |
 | State machine | Validated transitions, event ordering, duplicate detection and approval correlation; see [transition rules](docs/STATE_MACHINE.md) | Implemented |
-| Automated checks | Metadata, domain models, state/event combinations, registry, IPC codec and local socket integration | 6 CTest targets |
+| Automated checks | Domain, registry, codec, server, bridge, event processing and four executable demo scenarios | 12 CTest targets |
+| Event processing | Authenticated admission, validation, deduplication and isolated state-machine dispatch; see [processing contract](docs/EVENT_PROCESSING.md) | Implemented |
 | Local IPC server | Authenticated session binding, concurrent local sockets and liveness deadlines; see [server contracts](docs/LOCAL_SERVER.md) | Implemented component |
 | IPC protocol | Versioned JSON validation, bounded length-prefixed frames and incremental decoding; see [wire contract](docs/IPC_PROTOCOL.md) | Implemented |
 | Session registry | Up to 10 enabled sessions, duplicate protection and stable pet assignments; see [registry contracts](docs/SESSION_REGISTRY.md) | Implemented |
@@ -69,7 +70,7 @@ flowchart LR
 
 ### Planned runtime architecture
 
-The following flow is a design target. The IPC endpoint, dispatcher, registry, state machine, approval broker, pet UI, and SQLite repositories are not implemented in the current scaffold.
+The following flow is a design target. Domain models, state machine, registry, IPC server, simulator and event dispatcher are implemented and connected in demo mode. Desktop UI wiring, approval broker and SQLite repositories remain planned.
 
 ```mermaid
 flowchart LR
@@ -158,16 +159,16 @@ The current suite contains one test, `dimepenny.core.smoke`, which checks that C
 
 ```sh
 ./build/app/DimePenny.exe
-./build/bridge/DimePennyBridge.exe
+./build/bridge/DimePennyBridge.exe --demo
 ```
 
-`DimePenny.exe` opens the placeholder Qt window. `DimePennyBridge.exe` prints the scaffold version message and exits.
+`DimePenny.exe` opens the placeholder Qt window. `DimePennyBridge.exe --demo` starts an isolated server, authenticates a fake session, sends lifecycle events and exits.
 
 Run the executables from the same UCRT64 terminal used for the build so the matching Qt runtime directory remains on `PATH`.
 
 ## Development status
 
-Version `0.1.0` is the initial project scaffold. The committed source does **not** yet connect to Codex, register sessions, render desktop pets, open an IPC server, store SQLite data, or handle approvals.
+Version `0.1.0` includes domain and IPC components plus a fake-session demo. Real Codex integration, desktop pets, SQLite storage and approval execution remain planned.
 
 The next functional acceptance target in [PLAN.md](PLAN.md) is a simulated session registry that can register sessions safely, enforce the 10-session limit, reject duplicate identities, and assign stable pet identities. Later milestones add IPC, Qt pet windows, concurrency, persistence, verified Codex lifecycle events, and approval handling.
 

@@ -46,6 +46,13 @@ LocalServer::LocalServer(ServerOptions options, QObject* parent)
 }
 LocalServer::~LocalServer() { stop(); }
 
+void LocalServer::setRegistrationHandler(std::function<bool(const Message&)> handler)
+{
+    if (listener_.isListening() || !clients_.isEmpty())
+        throw std::logic_error("Install registration handler before listening");
+    registrationHandler_ = std::move(handler);
+}
+
 bool LocalServer::listen(const QString& endpoint)
 {
     if (listener_.isListening() || endpoint.isEmpty()) return false;
@@ -168,8 +175,11 @@ void LocalServer::handle(const std::shared_ptr<Client>& client, Message message)
             if (other != client && other->session == message.sessionId) {
                 drop(client, "session_already_connected"); return;
             }
-        client->session = message.sessionId;
         message.payload.remove("authToken"); // Never expose credentials to application observers.
+        if (registrationHandler_ && !registrationHandler_(message)) {
+            drop(client, "registration_rejected"); return;
+        }
+        client->session = message.sessionId;
         if (!write(client, outgoing(client->session, "registration_result",
                     {{"inReplyTo", message.messageId}, {"accepted", true}}))) return;
         emit sessionAuthenticated(client->session);
@@ -187,6 +197,8 @@ void LocalServer::handle(const std::shared_ptr<Client>& client, Message message)
     } else if (message.type == "disconnect") {
         drop(client, "client_disconnect");
     } else if (message.type == "event" || message.type == "error") {
+        emit authenticatedMessage(client->session, message);
+        if (client->closed) return;
         emit messageReceived(message);
     } else drop(client, "invalid_direction");
 }

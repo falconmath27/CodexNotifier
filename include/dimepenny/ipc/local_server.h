@@ -8,6 +8,7 @@
 #include <QTimer>
 #include <QHash>
 #include <memory>
+#include <functional>
 
 namespace dimepenny::ipc {
 
@@ -34,10 +35,13 @@ public:
     void revoke(const QString& sessionId);
     [[nodiscard]] int connectionCount() const { return static_cast<int>(clients_.size()); }
     [[nodiscard]] bool send(const Message& message);
+    // Install before listening. Trusted application callback; false denies admission.
+    void setRegistrationHandler(std::function<bool(const Message&)> handler);
 
 signals:
     void sessionAuthenticated(const QString& sessionId);
     void messageReceived(const dimepenny::ipc::Message& message);
+    void authenticatedMessage(const QString& boundSessionId, const dimepenny::ipc::Message& message);
     void sessionDisconnected(const QString& sessionId, const QString& reason);
 
 private:
@@ -47,6 +51,7 @@ private:
     QTimer timer_;
     QElapsedTimer clock_;
     QHash<QString, QString> credentials_;
+    std::function<bool(const Message&)> registrationHandler_;
     QHash<QLocalSocket*, std::shared_ptr<Client>> clients_;
     void acceptClients();
     void read(const std::shared_ptr<Client>& client);

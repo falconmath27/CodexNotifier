@@ -41,3 +41,21 @@ dimepenny_enable_warnings(dimepenny_server_tests)
 add_test(NAME dimepenny.ipc.server COMMAND dimepenny_server_tests)
 set_tests_properties(dimepenny.ipc.server PROPERTIES TIMEOUT 45)
 
+add_executable(dimepenny_bridge_tests integration/simulated_bridge_test.cpp)
+target_link_libraries(dimepenny_bridge_tests PRIVATE DimePenny::Core Qt6::Test)
+dimepenny_enable_warnings(dimepenny_bridge_tests)
+add_test(NAME dimepenny.ipc.bridge COMMAND dimepenny_bridge_tests)
+set_tests_properties(dimepenny.ipc.bridge PROPERTIES TIMEOUT 30)
+
+foreach(scenario normal duplicate reconnect malformed)
+    add_test(NAME dimepenny.bridge.demo.${scenario}
+        COMMAND dimepenny_bridge --demo --scenario ${scenario})
+    set_tests_properties(dimepenny.bridge.demo.${scenario} PROPERTIES TIMEOUT 15)
+endforeach()
+
+add_executable(dimepenny_event_processor_tests integration/event_processor_test.cpp)
+target_link_libraries(dimepenny_event_processor_tests PRIVATE DimePenny::Core Qt6::Test)
+dimepenny_enable_warnings(dimepenny_event_processor_tests)
+add_test(NAME dimepenny.application.events COMMAND dimepenny_event_processor_tests)
+set_tests_properties(dimepenny.application.events PROPERTIES TIMEOUT 30)
+

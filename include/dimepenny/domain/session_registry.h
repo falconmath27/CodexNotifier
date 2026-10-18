@@ -99,6 +99,13 @@ public:
         return RegistryResult::Reconnecting;
     }
 
+    // Transport loss reserves the registration slot and preserves replay history.
+    void markDisconnected(const SessionId& id) noexcept
+    {
+        const auto it = entries_.find(id);
+        if (it != entries_.end()) AgentStateMachine::deactivate(it->second.session);
+    }
+
     [[nodiscard]] RegistryEventResult applyEvent(const AgentEvent& event)
     {
         const auto it = entries_.find(event.sessionId());

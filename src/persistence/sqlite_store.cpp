@@ -165,6 +165,12 @@ void SqliteStore::setSetting(const QString& key, const QString& value) {
     if (key.isEmpty()) throw StorageError("Setting key must not be empty");
     query(db_, "INSERT INTO settings VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", {key, value});
 }
+void SqliteStore::markRestoredDisconnected()
+{
+    Transaction transaction(db_);
+    query(db_, "UPDATE sessions SET state='Disconnected' WHERE state <> 'Disconnected'");
+    transaction.commit();
+}
 QString SqliteStore::setting(const QString& key, const QString& fallback) const {
     auto q = query(db_, "SELECT value FROM settings WHERE key=?", {key});
     return q.next() ? q.value(0).toString() : fallback;

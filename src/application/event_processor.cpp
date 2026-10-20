@@ -77,13 +77,16 @@ EventProcessor::~EventProcessor() { server_.stop(); }
 
 void EventProcessor::enablePersistence(const QString& path)
 {
-    if (storage_ || registry_.size() || server_.connectionCount())
+    if (storage_ || registry_.size() || server_.isListening() || server_.connectionCount())
         throw StorageError("Persistence must be enabled before registration");
     auto store = std::make_unique<SqliteStore>(path);
     SessionRegistry restored;
     for (auto& entry : store->loadSessions())
         if (restored.restoreSession(std::move(entry.session), entry.enabled) != RegistryResult::Registered)
             throw StorageError("Saved sessions violate identity or capacity constraints");
+    // Complete recovery durably before publishing any session. A failed reset
+    // leaves this processor empty and does not partially expose saved live states.
+    store->markRestoredDisconnected();
     registry_ = std::move(restored);
     storage_ = std::move(store);
 }

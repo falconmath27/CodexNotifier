@@ -39,6 +39,144 @@ ipc::Message eventMessage(const QString& type, quint64 sequence, QJsonObject app
 class PersistenceTest : public QObject {
     Q_OBJECT
 private slots:
+    void crashRecovery_data() {
+        QTest::addColumn<QString>("previousState");
+        for (const auto* state : {"Unregistered", "Connecting", "Active", "Working", "Completed", "ApprovalNeeded", "Error", "Disconnected"})
+            QTest::newRow(state) << QString::fromLatin1(state);
+    }
+    void crashRecovery() {
+        QFETCH(QString, previousState);
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        const auto path = directory.filePath("recovery.sqlite3");
+        auto s = model();
+        quint64 nextSequence = 0;
+        int eventCount = 0;
+        {
+            SqliteStore store(path);
+            const ipc::Message registration{ipc::protocolVersion, "original-registration", "saved",
+                "2026-01-01T00:00:00.000Z", "register", {}};
+            store.save(s, true, &registration);
+            if (previousState != "Unregistered")
+                QCOMPARE(AgentStateMachine::beginConnecting(s), TransitionResult::Applied);
+            auto advance = [&](AgentEventType type, const QString& name, std::optional<ApprovalInfo> approval = std::nullopt) {
+                const auto wire = eventMessage(name, nextSequence, approval ? QJsonObject{{"requestId", "pending"}} : QJsonObject{});
+                const AgentEvent event{wire.messageId.toStdString(), s.id(), type,
+                    Session::Timestamp{std::chrono::seconds{static_cast<qint64>(nextSequence + 10)}}, nextSequence, approval};
+                QCOMPARE(AgentStateMachine::apply(s, event), TransitionResult::Applied);
+                store.save(s, true, &wire);
+                ++nextSequence; ++eventCount;
+            };
+            if (previousState != "Unregistered" && previousState != "Connecting")
+                advance(AgentEventType::SessionConnected, "SessionConnected");
+            if (previousState == "Working" || previousState == "Completed" || previousState == "ApprovalNeeded")
+                advance(AgentEventType::TaskStarted, "TaskStarted");
+            if (previousState == "Completed") advance(AgentEventType::TaskCompleted, "TaskCompleted");
+            if (previousState == "ApprovalNeeded")
+                advance(AgentEventType::ApprovalRequested, "ApprovalRequested", ApprovalInfo{"pending", std::nullopt});
+            if (previousState == "Error") advance(AgentEventType::SessionError, "SessionError");
+            if (previousState == "Disconnected") AgentStateMachine::deactivate(s);
+            store.save(s, true);
+            store.setSetting("keep", "unchanged");
+            // Leave a committed live snapshot, as an abrupt process exit would.
+            // No EventProcessor shutdown is involved in creating this fixture.
+        }
+        const auto endpoint = "recovery-" + QUuid::createUuid().toString(QUuid::WithoutBraces);
+        QString oldToken;
+        { ipc::LocalServer oldServer; oldToken = oldServer.authorize("saved"); }
+        InspectDb inspect(path);
+        QCOMPARE(inspect.scalar("SELECT state FROM sessions").toString(), previousState);
+        EventProcessor processor;
+        processor.enablePersistence(path);
+        auto state = [&] { return processor.registry().find(SessionId{"saved"})->state(); };
+        QVERIFY(state() == AgentState::Disconnected);
+        QCOMPARE(processor.registry().activeCount(), std::size_t{1});
+        const auto* restored = processor.registry().find(s.id());
+        QVERIFY(restored->pet() == s.pet()); QVERIFY(restored->project() == s.project());
+        QCOMPARE(restored->lastSequence(), s.lastSequence());
+        QCOMPARE(inspect.scalar("SELECT state FROM sessions").toString(), QString("Disconnected"));
+        QCOMPARE(inspect.scalar("SELECT count(*) FROM events").toInt(), eventCount);
+        QCOMPARE(inspect.scalar("SELECT count(*) FROM registrations").toInt(), 1);
+        QCOMPARE(inspect.scalar("SELECT count(*) FROM approval_history").toInt(), previousState == "ApprovalNeeded" ? 1 : 0);
+        QCOMPARE(processor.storage()->setting("keep"), QString("unchanged"));
+        const auto premature = eventMessage("SessionConnected", nextSequence);
+        QCOMPARE(processor.process("saved", premature), ProcessingResult::NotAuthenticated);
+        QVERIFY(processor.server().listen(endpoint));
+        const auto token = processor.server().authorize("saved");
+        QVERIFY(token != oldToken);
+        const auto payload = SqliteStore::registrationPayload(s);
+        {
+            ipc::SimulatedBridge stale(endpoint, "saved", oldToken, payload);
+            QSignalSpy rejected(&stale, &ipc::SimulatedBridge::failed);
+            stale.connectToServer(); QTRY_VERIFY(!rejected.isEmpty());
+            QVERIFY(!stale.isReady()); QVERIFY(state() == AgentState::Disconnected);
+        }
+        {
+            QLocalSocket noHandshake;
+            noHandshake.connectToServer(endpoint);
+            QTRY_VERIFY(noHandshake.state() == QLocalSocket::ConnectedState);
+            const auto bytes = ipc::encodeFrame(premature);
+            QCOMPARE(noHandshake.write(bytes), static_cast<qint64>(bytes.size()));
+            QTRY_VERIFY(noHandshake.state() == QLocalSocket::UnconnectedState);
+            QVERIFY(state() == AgentState::Disconnected);
+        }
+        {
+            auto wrongIdentity = payload;
+            auto pet = wrongIdentity.value("pet").toObject(); pet.insert("name", "Impostor");
+            wrongIdentity.insert("pet", pet);
+            ipc::SimulatedBridge mismatch(endpoint, "saved", token, wrongIdentity);
+            QSignalSpy rejected(&mismatch, &ipc::SimulatedBridge::failed);
+            mismatch.connectToServer(); QTRY_VERIFY(!rejected.isEmpty());
+            QVERIFY(state() == AgentState::Disconnected);
+        }
+        ipc::SimulatedBridge bridge(endpoint, "saved", token, payload);
+        if (s.lastSequence()) bridge.resumeAfter(*s.lastSequence());
+        bridge.connectToServer(); QTRY_VERIFY(bridge.isReady());
+        QVERIFY(state() == AgentState::Connecting); // Registration alone is not Active.
+        QCOMPARE(inspect.scalar("SELECT state FROM sessions").toString(), QString("Connecting"));
+        if (eventCount) {
+            QCOMPARE(processor.process("saved", eventMessage("SessionConnected", 0)), ProcessingResult::Duplicate);
+            auto stale = eventMessage("SessionConnected", 0); stale.messageId = "new-stale-id";
+            QCOMPARE(processor.process("saved", stale), ProcessingResult::OutOfOrder);
+        }
+        QVERIFY(bridge.sendEvent("SessionConnected"));
+        QTRY_VERIFY(state() == AgentState::Active);
+        QCOMPARE(inspect.scalar("SELECT count(*) FROM registrations").toInt(), 2);
+        QCOMPARE(inspect.scalar("SELECT count(*) FROM events").toInt(), eventCount + 1);
+        // Old pending approvals cannot become live actions on the recovered connection.
+        auto oldApproval = eventMessage("ApprovalResolved", nextSequence + 1,
+            {{"requestId", "pending"}, {"decision", "approve"}});
+        oldApproval.timestamp = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+        QCOMPARE(processor.process("saved", oldApproval), ProcessingResult::InvalidTransition);
+        QVERIFY(state() == AgentState::Active);
+    }
+    void failedRecoveryIsAtomic() {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("failed-recovery.sqlite3");
+        {
+            SqliteStore store(path);
+            auto s = model();
+            QCOMPARE(AgentStateMachine::beginConnecting(s), TransitionResult::Applied);
+            store.save(s, true);
+        }
+        InspectDb inspect(path);
+        QVERIFY(inspect.exec("CREATE TRIGGER fail_recovery BEFORE UPDATE ON sessions BEGIN SELECT RAISE(ABORT,'recovery failure'); END"));
+        EventProcessor processor;
+        QVERIFY_EXCEPTION_THROWN(processor.enablePersistence(path), StorageError);
+        QCOMPARE(processor.registry().size(), std::size_t{0});
+        QVERIFY(!processor.storage());
+        QCOMPARE(inspect.scalar("SELECT state FROM sessions").toString(), QString("Connecting"));
+        QVERIFY(inspect.exec("DROP TRIGGER fail_recovery"));
+        processor.enablePersistence(path);
+        QCOMPARE(inspect.scalar("SELECT state FROM sessions").toString(), QString("Disconnected"));
+        QVERIFY(processor.registry().find(SessionId{"saved"})->state() == AgentState::Disconnected);
+    }
+    void recoveryMustPrecedeListening() {
+        QTemporaryDir directory;
+        EventProcessor processor;
+        QVERIFY(processor.server().listen("recovery-order-" + QUuid::createUuid().toString(QUuid::WithoutBraces)));
+        QVERIFY_EXCEPTION_THROWN(processor.enablePersistence(directory.filePath("state.sqlite3")), StorageError);
+        QCOMPARE(processor.registry().size(), std::size_t{0});
+    }
     void roundTripAndMigration() {
         QTemporaryDir directory; QVERIFY(directory.isValid());
         const auto path = directory.filePath("state.sqlite3");

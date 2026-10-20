@@ -7,6 +7,51 @@
 class ActivationWindowTest : public QObject {
     Q_OBJECT
 private slots:
+    void allAssignmentsSurviveRestart()
+    {
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        const auto database = directory.filePath("ten-recovered.sqlite3");
+        QMap<QString, QString> identities;
+        {
+            dimepenny::ActivationWindow window(database);
+            for (int i = 0; i < 10; ++i) {
+                window.configure(directory.path(), "PowerShell", i == 0 ? 0 : 1);
+                QVERIFY(window.canActivate()); window.activate();
+                QTRY_COMPARE(window.sessions().size(), i + 1);
+                QTRY_VERIFY(window.connection().startsWith("Connected:"));
+            }
+            for (auto* candidate : QGuiApplication::topLevelWindows())
+                if (auto* pet = qobject_cast<dimepenny::PetWindow*>(candidate))
+                    identities.insert(pet->sessionId(), pet->agentName() + ":" + pet->appearance());
+            QCOMPARE(identities.size(), 10);
+        }
+        {
+            dimepenny::ActivationWindow window(database);
+            QTRY_COMPARE(window.sessions().size(), 10);
+            QCOMPARE(window.capacityUsed(), 10);
+            QVERIFY(!window.canActivate());
+            QMap<QString, QString> recovered;
+            for (auto* candidate : QGuiApplication::topLevelWindows())
+                if (auto* pet = qobject_cast<dimepenny::PetWindow*>(candidate)) {
+                    QCOMPARE(pet->state(), QString("Disconnected"));
+                    recovered.insert(pet->sessionId(), pet->agentName() + ":" + pet->appearance());
+                }
+            QCOMPARE(recovered, identities);
+            const auto bridges = window.findChildren<dimepenny::ipc::SimulatedBridge*>();
+            QCOMPARE(bridges.size(), 10);
+            for (auto* bridge : bridges) QVERIFY(!bridge->isReady());
+            const auto reconnectId = identities.firstKey();
+            window.reconnectSession(reconnectId);
+            QTRY_VERIFY(window.connection().startsWith("Connected:"));
+            QTRY_VERIFY([&] {
+                for (const auto& entry : window.sessions()) {
+                    const auto row = entry.toMap();
+                    if (row.value("state").toString() != (row.value("sessionId").toString() == reconnectId ? "Active" : "Disconnected")) return false;
+                }
+                return true;
+            }());
+        }
+    }
     void savedSessionsReturnDisconnected()
     {
         QTemporaryDir directory; QVERIFY(directory.isValid());

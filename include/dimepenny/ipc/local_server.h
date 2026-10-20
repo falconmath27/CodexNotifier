@@ -29,6 +29,7 @@ public:
     [[nodiscard]] bool listen(const QString& endpoint);
     void stop();
     [[nodiscard]] QString errorString() const { return listener_.errorString(); }
+    [[nodiscard]] bool isListening() const noexcept { return listener_.isListening(); }
     // Trusted caller provisions/rotates a 256-bit secret for exactly one session.
     // Rotation disconnects any existing connection for that session.
     [[nodiscard]] QString authorize(const QString& sessionId);

@@ -217,6 +217,14 @@ On restart, sessions restore as **Disconnected**, retaining slot reservations, i
 
 For backups, close the app first, then copy the database. Do not delete its WAL/SHM files while running. The tests cover schema upgrades, reopening, replay/order protection, transaction rollback, competing writers, restart/reconnect, and ten-session event bursts with persistence enabled. This milestone uses short synchronous transactions on the event-loop thread with a bounded 100 ms lock wait; a background writer and history retention policy remain future optimizations.
 
+### Restart recovery (Task 14)
+
+Startup validates saved identities and capacity before exposing any restored session. It then atomically changes every saved session snapshot to `Disconnected` in SQLite, including snapshots left `Active`, `Working` or `ApprovalNeeded` by an abrupt exit. Event, registration and approval history, settings, sequence numbers and pet assignments are preserved. If recovery validation or the database reset fails, no partially restored registry is published and the desktop does not start its server. Recovery cannot be enabled after the server starts listening.
+
+The desktop restores reserved pets without connecting their bridges automatically. Choose **Reconnect** for each session you want to resume. A new process has no old authentication secrets: a fresh authorized registration with matching session/pet/project metadata is required. Registration moves the session only to `Connecting`; a newly accepted `SessionConnected` event is required for `Active`. Old credentials, unregistered socket events, duplicate event IDs and stale sequences cannot reactivate a pet. Pending approvals from the previous run remain history, not executable actions.
+
+Recovery tests seed committed snapshots in all eight lifecycle states (simulating an abrupt exit without a graceful-disconnect write), check database and in-memory states, inject a recovery-write failure, and verify all ten UI assignments across restart. These tests use temporary databases and local authenticated sockets, not real Codex sessions.
+
 ### Qt Quick presentation
 
 The app uses QGuiApplication and QQuickView; it no longer links Qt Widgets. The screens in `app/qml/Activation.qml` and `app/qml/Pet.qml` are embedded in the executable through `app/ui.qrc`. Qt Quick Controls use FluentWinUI3 with an explicit light theme. The C++ presentation adapters expose properties and commands to QML; EventProcessor and the domain remain responsible for authenticated state changes.

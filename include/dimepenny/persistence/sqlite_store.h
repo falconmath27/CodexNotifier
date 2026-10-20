@@ -19,6 +19,9 @@ public:
     SqliteStore& operator=(const SqliteStore&) = delete;
     struct SavedSession { Session session; bool enabled; };
     std::vector<SavedSession> loadSessions() const;
+    // Call after validating all restored records, before exposing them or listening.
+    // History and reservations are untouched; connection liveness never survives restart.
+    void markRestoredDisconnected();
     void save(const Session& session, bool enabled, const ipc::Message* message = nullptr);
     void setSetting(const QString& key, const QString& value);
     QString setting(const QString& key, const QString& fallback = {}) const;

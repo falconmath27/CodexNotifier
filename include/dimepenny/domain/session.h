@@ -38,9 +38,11 @@ public:
     [[nodiscard]] const std::optional<std::string>& codexSessionId() const noexcept { return codexSessionId_; }
     [[nodiscard]] std::optional<std::uint32_t> processId() const noexcept { return processId_; }
     [[nodiscard]] AgentState state() const noexcept { return state_; }
+    [[nodiscard]] std::optional<std::uint64_t> lastSequence() const noexcept { return lastSequence_; }
 
 private:
     friend class AgentStateMachine;
+    friend class SqliteStore;
     SessionId id_;
     ProjectInfo project_;
     PetIdentity pet_;

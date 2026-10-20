@@ -64,10 +64,29 @@ EventProcessor::EventProcessor(ipc::ServerOptions options, QObject* parent)
         [this](const QString& id, const QString&) {
             connected_.remove(id);
             registry_.markDisconnected(SessionId{id.toStdString()});
+            if (storage_) {
+                if (const auto* session = registry_.find(SessionId{id.toStdString()})) {
+                    try { storage_->save(*session, registry_.isActive(session->id())); }
+                    catch (const StorageError& error) { emit persistenceFailed(QString::fromUtf8(error.what())); }
+                }
+            }
             emit stateChanged(id);
         });
 }
 EventProcessor::~EventProcessor() { server_.stop(); }
+
+void EventProcessor::enablePersistence(const QString& path)
+{
+    if (storage_ || registry_.size() || server_.connectionCount())
+        throw StorageError("Persistence must be enabled before registration");
+    auto store = std::make_unique<SqliteStore>(path);
+    SessionRegistry restored;
+    for (auto& entry : store->loadSessions())
+        if (restored.restoreSession(std::move(entry.session), entry.enabled) != RegistryResult::Registered)
+            throw StorageError("Saved sessions violate identity or capacity constraints");
+    registry_ = std::move(restored);
+    storage_ = std::move(store);
+}
 
 bool EventProcessor::admit(const ipc::Message& message)
 {
@@ -91,17 +110,21 @@ bool EventProcessor::admit(const ipc::Message& message)
                          static_cast<std::uint8_t>(color.value("green").toInt()),
                          static_cast<std::uint8_t>(color.value("blue").toInt())}},
             payload.value("terminalType").toString().toStdString(), timestamp(message.timestamp), codex, pid};
+        auto candidate = registry_;
         if (const auto* existing = registry_.find(session.id())) {
             // Reconnect cannot overwrite identity, project, appearance or terminal metadata.
             if (existing->project() != session.project() || existing->pet() != session.pet()
                 || existing->codexSessionId() != session.codexSessionId()
                 || existing->terminalType() != session.terminalType()
                 || existing->processId() != session.processId()) return false;
-            return registry_.reconnect(session.id()) == RegistryResult::Reconnecting;
-        }
-        return registry_.registerSession(std::move(session)) == RegistryResult::Registered;
+            if (candidate.reconnect(session.id()) != RegistryResult::Reconnecting) return false;
+        } else if (candidate.registerSession(std::move(session)) != RegistryResult::Registered) return false;
+        if (storage_) storage_->save(*candidate.find(SessionId{message.sessionId.toStdString()}), true, &message);
+        registry_ = std::move(candidate);
+        return true;
     } catch (const ipc::ProtocolError&) { return false; }
       catch (const std::invalid_argument&) { return false; }
+      catch (const StorageError& error) { emit persistenceFailed(QString::fromUtf8(error.what())); return false; }
 }
 
 ProcessingResult EventProcessor::process(const QString& boundId, const ipc::Message& message)
@@ -124,11 +147,21 @@ ProcessingResult EventProcessor::process(const QString& boundId, const ipc::Mess
             const AgentEvent event{message.messageId.toStdString(), SessionId{message.sessionId.toStdString()},
                 eventType(message.payload.value("eventType").toString()), timestamp(message.timestamp),
                 message.payload.value("sequence").toString().toULongLong(), approval};
-            result = map(registry_.applyEvent(event));
-            if (result == ProcessingResult::Applied) emit stateChanged(boundId);
+            // Publish only after the durable snapshot and event/approval rows commit.
+            auto candidate = registry_;
+            result = map(candidate.applyEvent(event));
+            if (result == ProcessingResult::Applied) {
+                if (storage_) storage_->save(*candidate.find(event.sessionId()), true, &message);
+                registry_ = std::move(candidate);
+                emit stateChanged(boundId);
+            }
         }
     } catch (const ipc::ProtocolError&) { result = ProcessingResult::InvalidMessage; }
       catch (const std::invalid_argument&) { result = ProcessingResult::InvalidMessage; }
+      catch (const StorageError& error) {
+          result = ProcessingResult::PersistenceFailed;
+          emit persistenceFailed(QString::fromUtf8(error.what()));
+      }
     emit eventProcessed(boundId, message.messageId, result);
     return result;
 }

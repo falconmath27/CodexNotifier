@@ -49,6 +49,20 @@ public:
         return it == entries_.end() ? nullptr : &it->second.session;
     }
 
+    // Startup-only: reuse normal identity/capacity validation, never restore live state.
+    [[nodiscard]] RegistryResult restoreSession(Session session, bool enabled)
+    {
+        if (session.state() != AgentState::Disconnected) return RegistryResult::InvalidState;
+        Session seed{session.id(), session.project(), session.pet(), session.terminalType(),
+                     session.createdAt(), session.codexSessionId(), session.processId()};
+        const auto result = registerSession(std::move(seed));
+        if (result != RegistryResult::Registered) return result;
+        auto& entry = entries_.at(session.id());
+        entry.session = std::move(session);
+        entry.enabled = enabled;
+        return RegistryResult::Registered;
+    }
+
     [[nodiscard]] bool isActive(const SessionId& id) const noexcept
     {
         const auto it = entries_.find(id);

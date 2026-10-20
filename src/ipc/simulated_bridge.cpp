@@ -32,6 +32,13 @@ Message SimulatedBridge::make(const QString& type, QJsonObject payload) const
     return {protocolVersion, QUuid::createUuid().toString(QUuid::WithoutBraces), sessionId_,
         QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs), type, std::move(payload)};
 }
+void SimulatedBridge::resumeAfter(std::uint64_t lastSequence)
+{
+    if (socket_.state() != QLocalSocket::UnconnectedState || lastEvent_)
+        throw std::logic_error("Cannot reset a running simulator's sequence");
+    exhausted_ = lastSequence == std::numeric_limits<quint64>::max();
+    sequence_ = exhausted_ ? lastSequence : lastSequence + 1;
+}
 void SimulatedBridge::connectToServer()
 {
     if (socket_.state() != QLocalSocket::UnconnectedState) return;

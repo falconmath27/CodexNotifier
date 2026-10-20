@@ -22,7 +22,7 @@ const QList<QColor> appearanceColors = {
 };
 const QStringList terminals = {"PowerShell", "Command Prompt", "Git Bash", "WSL"};
 }
-ActivationWindow::ActivationWindow()
+ActivationWindow::ActivationWindow(const QString& databasePath)
 {
     initializeUiResources();
     QQuickStyle::setStyle("FluentWinUI3");
@@ -43,14 +43,40 @@ ActivationWindow::ActivationWindow()
         refresh();
     });
     endpoint_ = "dimepenny-ui-" + uniqueId();
-    listening_ = processor_.server().listen(endpoint_);
-    connection_ = listening_ ? "Ready for your first session" : "Local server unavailable: " + processor_.server().errorString();
+    connect(&processor_, &EventProcessor::persistenceFailed, this, [this](const QString& reason) {
+        connection_ = "Storage error: " + reason; emit changed();
+    });
+    try {
+        if (!databasePath.isEmpty()) processor_.enablePersistence(databasePath);
+        if (auto* store = processor_.storage()) {
+            resize(qBound(720, store->setting("activation.width", "1000").toInt(), 3840),
+                   qBound(640, store->setting("activation.height", "760").toInt(), 2160));
+        }
+        listening_ = processor_.server().listen(endpoint_);
+        connection_ = listening_ ? "Ready for your first session" : "Local server unavailable: " + processor_.server().errorString();
+        for (const auto* session : processor_.registry().activeSessions()) {
+            const auto id = QString::fromStdString(session->id().value());
+            const auto appearance = appearances.indexOf(QString::fromStdString(session->pet().appearanceKey()), 0, Qt::CaseInsensitive);
+            if (appearance < 0) throw StorageError("Unknown saved pet appearance");
+            appearances_.insert(id, static_cast<int>(appearance));
+            names_.insert(id, QString::fromStdString(session->pet().name()));
+            auto* bridge = new ipc::SimulatedBridge(endpoint_, id, processor_.server().authorize(id), SqliteStore::registrationPayload(*session), this);
+            if (session->lastSequence()) bridge->resumeAfter(*session->lastSequence());
+            bridges_.insert(id, bridge); wireBridge(id, bridge);
+        }
+        if (processor_.registry().size()) connection_ = "Saved sessions restored. Reconnect when ready.";
+    } catch (const std::exception& error) {
+        listening_ = false; processor_.server().stop();
+        connection_ = "Could not open saved data: " + QString::fromUtf8(error.what());
+    }
     setSource(QUrl("qrc:/qml/Activation.qml"));
+    if (listening_) refresh();
 }
 ActivationWindow::~ActivationWindow()
 {
     closing_ = true;
     refreshTimer_.stop();
+    saveWindowSettings();
     for (auto* pet : pets_) delete pet;
     for (auto* bridge : bridges_) { bridge->disconnect(this); delete bridge; }
     processor_.disconnect(this); processor_.server().stop();
@@ -60,9 +86,21 @@ void ActivationWindow::closeEvent(QCloseEvent* event)
 {
     closing_ = true;
     refreshTimer_.stop();
+    saveWindowSettings();
     for (auto* pet : pets_) pet->hide();
     processor_.server().stop();
     QQuickView::closeEvent(event);
+}
+void ActivationWindow::saveWindowSettings()
+{
+    if (auto* store = processor_.storage()) {
+        try {
+            store->setSetting("activation.width", QString::number(width()));
+            store->setSetting("activation.height", QString::number(height()));
+        } catch (const StorageError& error) {
+            qWarning("Could not save window settings: %s", error.what());
+        }
+    }
 }
 void ActivationWindow::configure(const QString& directory, const QString& terminal, int companionType)
 {
@@ -124,6 +162,11 @@ void ActivationWindow::activate()
     auto* bridge = new ipc::SimulatedBridge(endpoint_, id, processor_.server().authorize(id), payload(id), this);
     bridges_.insert(id, bridge); appearances_.insert(id, appearance);
     names_.insert(id, name); pending_ = id;
+    wireBridge(id, bridge);
+    connection_ = "Connecting: " + names_.value(id); refresh(); bridge->connectToServer();
+}
+void ActivationWindow::wireBridge(const QString& id, ipc::SimulatedBridge* bridge)
+{
     connect(bridge, &ipc::SimulatedBridge::registered, this, [bridge] { (void)bridge->sendEvent("SessionConnected"); });
     connect(bridge, &ipc::SimulatedBridge::failed, this, [this, id](const QString& reason) {
         failed_.insert(id); if (pending_ == id) pending_.clear();
@@ -140,7 +183,6 @@ void ActivationWindow::activate()
         if (!failed_.contains(id)) connection_ = "Disconnected: " + names_.value(id) + ". Its pet stays reserved.";
         refresh();
     });
-    connection_ = "Connecting: " + names_.value(id); refresh(); bridge->connectToServer();
 }
 void ActivationWindow::refresh()
 {

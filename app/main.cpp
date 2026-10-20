@@ -4,6 +4,8 @@
 #include <QGuiApplication>
 #include <QQuickStyle>
 #include <QString>
+#include <QDir>
+#include <QStandardPaths>
 
 namespace {
 
@@ -23,7 +25,12 @@ int main(int argc, char* argv[])
     QGuiApplication::setOrganizationName("DimePenny");
     QQuickStyle::setStyle("FluentWinUI3");
 
-    dimepenny::ActivationWindow window;
+    const auto dataDirectory = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    if (dataDirectory.isEmpty() || !QDir().mkpath(dataDirectory)) {
+        qCritical("Cannot create application data directory");
+        return 1;
+    }
+    dimepenny::ActivationWindow window(QDir(dataDirectory).filePath("dimepenny.sqlite3"));
     if (window.status() != QQuickView::Ready) return 1;
 
     window.show();

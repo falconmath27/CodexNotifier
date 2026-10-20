@@ -7,11 +7,43 @@
 class ActivationWindowTest : public QObject {
     Q_OBJECT
 private slots:
+    void savedSessionsReturnDisconnected()
+    {
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        const auto database = directory.filePath("desktop.sqlite3");
+        QString id;
+        {
+            dimepenny::ActivationWindow window(database);
+            window.configure(directory.path(), "PowerShell", 0);
+            window.activate();
+            QTRY_COMPARE(window.sessions().size(), 1);
+            QTRY_VERIFY(window.connection().startsWith("Connected:"));
+            id = window.sessions().first().toMap().value("sessionId").toString();
+            window.resize(1100, 800);
+        }
+        {
+            dimepenny::ActivationWindow window(database);
+            QCOMPARE(window.size(), QSize(1100, 800));
+            QTRY_COMPARE(window.sessions().size(), 1);
+            const auto restored = window.sessions().first().toMap();
+            QCOMPARE(restored.value("sessionId").toString(), id);
+            QCOMPARE(restored.value("name").toString(), QString("Dime"));
+            QCOMPARE(restored.value("state").toString(), QString("Disconnected"));
+            QCOMPARE(window.capacityUsed(), 1);
+            QVERIFY(window.dimeReserved());
+            window.reconnectSession(id);
+            QTRY_COMPARE(window.sessions().first().toMap().value("state").toString(), QString("Active"));
+            window.configure(directory.path(), "PowerShell", 1);
+            QCOMPARE(window.nextName(), QString("Penny1"));
+            window.activate();
+            QTRY_COMPARE(window.sessions().size(), 2);
+        }
+    }
     void concurrentPets()
     {
         using namespace dimepenny;
         QTemporaryDir project; QVERIFY(project.isValid());
-        ActivationWindow window;
+        ActivationWindow window(project.filePath("concurrent.sqlite3"));
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
         QList<ipc::SimulatedBridge*> bridges;

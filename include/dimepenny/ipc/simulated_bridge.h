@@ -10,6 +10,7 @@ public:
     SimulatedBridge(QString endpoint, QString sessionId, QString token,
                     QJsonObject registrationPayload, QObject* parent = nullptr);
     void connectToServer(); // Reconnect retains sequence and last event.
+    void resumeAfter(std::uint64_t lastSequence); // Before the first connection only.
     void disconnectFromServer();
     [[nodiscard]] bool isReady() const noexcept { return ready_; }
     [[nodiscard]] bool sendEvent(const QString& type, QJsonObject approval = {});

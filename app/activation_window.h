@@ -18,7 +18,7 @@ class ActivationWindow final : public QQuickView {
     Q_PROPERTY(int pennyCount READ pennyCount NOTIFY changed)
     Q_PROPERTY(bool dimeReserved READ dimeReserved NOTIFY changed)
 public:
-    ActivationWindow();
+    explicit ActivationWindow(const QString& databasePath = {});
     ~ActivationWindow() override;
     QString validation() const;
     bool canActivate() const { return validationError().isEmpty(); }
@@ -57,5 +57,7 @@ private:
     QJsonObject payload(const QString& id) const;
     void refresh();
     void flushRefresh();
+    void wireBridge(const QString& id, ipc::SimulatedBridge* bridge);
+    void saveWindowSettings();
 };
 }

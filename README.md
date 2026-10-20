@@ -41,7 +41,7 @@ The proposed first release is local and Windows-first: one persistent Qt desktop
 | Session registry | Up to 10 enabled sessions, duplicate protection and stable pet assignments; see [registry contracts](docs/SESSION_REGISTRY.md) | Implemented |
 | Desktop pets | QML windows with lifecycle-driven paw visuals; animal sprite artwork remains planned | Implemented |
 | Approval integration | Deliver decisions and enforce expiry through the bridge | Planned |
-| Persistence | Store session history and pet assignments in SQLite | Planned |
+| Persistence | Versioned SQLite sessions, identities, projects, events, registrations, settings and approval history | Implemented |
 | Context linking | Build a reviewable brief from explicitly selected projects | Later phase |
 
 The [prototype sketch](Prottotype_1.pdf) captures the early desktop concept and the idea of creating a new agent from user-reviewed context. It is a design reference, not a screenshot of the current application.
@@ -70,7 +70,7 @@ flowchart LR
 
 ### Planned runtime architecture
 
-The following flow is a design target. Domain models, state machine, registry, IPC server, simulator and event dispatcher are implemented and connected in demo mode. Desktop UI wiring, approval broker and SQLite repositories remain planned.
+The following flow is a design target. Domain models, state machine, registry, IPC server, simulator, event dispatcher, desktop UI and SQLite persistence are implemented. The approval broker remains planned.
 
 ```mermaid
 flowchart LR
@@ -154,7 +154,7 @@ To enforce warnings as errors during development, add `-DDIMEPENNY_WARNINGS_AS_E
 ctest --test-dir build --output-on-failure
 ```
 
-The suite contains 14 CTest targets covering metadata, domain models, state transitions, registry rules, IPC, simulated bridges, event processing, activation, and desktop pet windows. IPC tests require permission to open local named pipes. UI tests use Qt's offscreen platform.
+The suite contains 15 CTest targets covering metadata, domain models, state transitions, registry rules, IPC, simulated bridges, event processing, SQLite persistence, activation, and desktop pet windows. IPC tests require permission to open local named pipes. UI tests use Qt's offscreen platform. Persistence tests use temporary databases, never the user's app data.
 
 ### Run the executables
 
@@ -163,7 +163,7 @@ The suite contains 14 CTest targets covering metadata, domain models, state tran
 ./build/bridge/DimePennyBridge.exe --demo
 ```
 
-`DimePenny.exe` opens the activation interface. Choose **Dime** or **Pennies**, browse to an existing project directory, select terminal metadata, then activate a simulated session. Only one orange **Dime** and nine **Pennies** can be activated. Pennies receive unused colors automatically and are named **Penny1** through **Penny9** in activation order. The UI shows availability and connection state. A disconnected session keeps its name, slot and color; select its row to reconnect. Registrations last for the app's lifetime and are not yet persisted.
+`DimePenny.exe` opens the activation interface. Choose **Dime** or **Pennies**, browse to an existing project directory, select terminal metadata, then activate a simulated session. Only one orange **Dime** and nine **Pennies** can be activated. Pennies receive unused colors automatically and are named **Penny1** through **Penny9** in activation order. The UI shows availability and connection state. A disconnected session keeps its name, slot and color; select its row to reconnect. Registrations are saved and return as disconnected sessions after restarting the app.
 
 Activation uses an in-process simulated bridge over authenticated local IPC; it does not launch a terminal or control Codex. Generated names are stored as the pet's display name in the existing registration protocol. Automatically assigned colors reserve identities, are included in the pet registration payload, and select the matching idle sprite animation. The activation controller enforces both companion limits, including while a connection is pending.
 
@@ -176,7 +176,7 @@ Each registered session gets one transparent, frameless, always-on-top tool wind
 - Hover for session information. Double-click or press Enter for a non-modal details window that updates with the session.
 - Right-click or press Shift+F10 for details, open project folder, reconnect a disconnected session, toggle always-on-top, reset position, show activation, or hide the pet.
 - Hiding or closing a pet does not deactivate its session. Choose **Show pet** on its session in activation to restore it. Reconnect preserves the existing pet window and position.
-- Positions are kept only while the app runs; persistence remains future work. Closing the activation application ends its pet windows and simulated connections.
+- Pet positions are kept only while the app runs; position persistence remains future work. Closing the activation application ends its pet windows and simulated connections, but keeps their saved identities.
 
 ### Pet visual states (Task 11)
 
@@ -205,6 +205,18 @@ Validated events mark only their own session's pet for an update. Presentation c
 
 The multi-pet integration test exercises ten authenticated bridges with 400 interleaved lifecycle events, independent final states, duplicate suppression, a UI event-loop timer, and reconnect identity. Idle sprites have distinct colors; shared working/approval artwork remains identifiable by each pet's unique name. The compact growing sidebar is a separate layout milestone; this task retains independent pet windows.
 
+### SQLite persistence (Task 13)
+
+The desktop executable stores `dimepenny.sqlite3` in Qt's `AppLocalDataLocation` (normally `%LOCALAPPDATA%/DimePenny/DimePenny` on Windows). The app creates that directory; startup errors are shown instead of silently replacing saved data. A lock prevents two app instances from writing the same database. The simulator CLI remains ephemeral unless its host explicitly enables persistence.
+
+The versioned schema stores projects, stable pet identities, session snapshots, accepted lifecycle events, registration history, string-valued settings, and approval request/decision history. Schema migrations run transactionally using `PRAGMA user_version`; v2 adds and backfills approval history. Newer schemas are refused without downgrading them. Foreign keys, uniqueness constraints, WAL and full synchronous commits protect relationships and committed history.
+
+Each accepted event, session snapshot and approval-history entry commits in one transaction before the UI is notified. Failed writes reject the update without consuming its event ID or sequence. Only accepted lifecycle events are retained, not rejected/malformed messages or heartbeat traffic. Authentication tokens are never saved. SQLite is not encrypted: the database contains local project paths and session metadata.
+
+On restart, sessions restore as **Disconnected**, retaining slot reservations, identities, metadata, event deduplication IDs and ordering sequences. Reconnect provisions new credentials and the simulator continues its saved sequence. Historical approval records are retained, but pending approval actions are not resumed or executed. Window width/height are currently saved settings; pet positions, hidden state and animation preferences are not yet persisted across app restarts.
+
+For backups, close the app first, then copy the database. Do not delete its WAL/SHM files while running. The tests cover schema upgrades, reopening, replay/order protection, transaction rollback, competing writers, restart/reconnect, and ten-session event bursts with persistence enabled. This milestone uses short synchronous transactions on the event-loop thread with a bounded 100 ms lock wait; a background writer and history retention policy remain future optimizations.
+
 ### Qt Quick presentation
 
 The app uses QGuiApplication and QQuickView; it no longer links Qt Widgets. The screens in `app/qml/Activation.qml` and `app/qml/Pet.qml` are embedded in the executable through `app/ui.qrc`. Qt Quick Controls use FluentWinUI3 with an explicit light theme. The C++ presentation adapters expose properties and commands to QML; EventProcessor and the domain remain responsible for authenticated state changes.
@@ -219,9 +231,9 @@ Run the executables from the same UCRT64 terminal used for the build so the matc
 
 ## Development status
 
-Version `0.1.0` includes domain and IPC components, a fake-session demo, the activation interface, and lifecycle-animated desktop paw windows. Real Codex integration, animal sprite artwork, SQLite storage and approval execution remain planned.
+Version `0.1.0` includes domain and IPC components, a fake-session demo, the activation interface, lifecycle-animated desktop pets and SQLite persistence. Real Codex integration, additional sprite artwork and approval execution remain planned.
 
-The implemented registry enforces the 10-session limit, rejects duplicate identities, and assigns stable pet identities. Later milestones in [PLAN.md](PLAN.md) add animation, persistence, verified Codex lifecycle events, and approval handling.
+The implemented registry enforces the 10-session limit, rejects duplicate identities, and assigns stable pet identities. Later milestones in [PLAN.md](PLAN.md) extend animation, verified Codex lifecycle events, and approval handling.
 
 ## Contributing
 

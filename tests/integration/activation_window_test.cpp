@@ -7,6 +7,36 @@
 class ActivationWindowTest : public QObject {
     Q_OBJECT
 private slots:
+    void codexAdapterAndRecovery()
+    {
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        const auto database = directory.filePath("codex.sqlite3");
+        QString id;
+        {
+            dimepenny::ActivationWindow window(database);
+            window.configure(directory.path(), "PowerShell", 0);
+            window.activateCodex(QCoreApplication::applicationDirPath() + "/dimepenny_fake_codex.exe", "fixture prompt");
+            QTRY_COMPARE(window.sessions().size(), 1);
+            QTRY_COMPARE(window.sessions().first().toMap().value("state").toString(), QString("Completed"));
+            id = window.sessions().first().toMap().value("sessionId").toString();
+            QCOMPARE(window.sessions().first().toMap().value("name").toString(), QString("Dime"));
+            for (auto* candidate : QGuiApplication::topLevelWindows())
+                if (auto* pet = qobject_cast<dimepenny::PetWindow*>(candidate)) {
+                    QVERIFY(pet->details().contains("Codex exec session"));
+                    QVERIFY(!pet->details().contains("Simulated session"));
+                }
+        }
+        {
+            dimepenny::ActivationWindow window(database);
+            QTRY_COMPARE(window.sessions().size(), 1);
+            const auto row = window.sessions().first().toMap();
+            QCOMPARE(row.value("state").toString(), QString("Disconnected"));
+            QVERIFY(!row.value("canReconnect").toBool());
+            QCOMPARE(window.findChildren<dimepenny::ipc::SimulatedBridge*>().size(), 0);
+            window.reconnectSession(id);
+            QCOMPARE(window.sessions().first().toMap().value("state").toString(), QString("Disconnected"));
+        }
+    }
     void allAssignmentsSurviveRestart()
     {
         QTemporaryDir directory; QVERIFY(directory.isValid());

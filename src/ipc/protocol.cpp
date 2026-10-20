@@ -155,7 +155,7 @@ void validate(const Message& message)
         const auto type = text(p, "eventType");
         const bool approval = type == "ApprovalRequested" || type == "ApprovalResolved";
         require(approval || type == "SessionConnected" || type == "TaskStarted"
-                || type == "TaskCompleted" || type == "SessionDisconnected" || type == "SessionError",
+                || type == "TaskCompleted" || type == "TaskInterrupted" || type == "SessionDisconnected" || type == "SessionError",
                 "Unknown lifecycle event");
         if (approval) {
             const auto details = object(p, "approval");

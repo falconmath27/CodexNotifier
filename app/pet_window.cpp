@@ -11,7 +11,8 @@
 #include <limits>
 static void initializePetResources() { Q_INIT_RESOURCE(ui); }
 namespace dimepenny {
-PetWindow::PetWindow(const Session& session) : id_(QString::fromStdString(session.id().value()))
+PetWindow::PetWindow(const Session& session, bool simulated, bool interactive)
+    : id_(QString::fromStdString(session.id().value())), simulated_(simulated), interactive_(interactive)
 {
     initializePetResources();
     if (QQuickStyle::name().isEmpty()) QQuickStyle::setStyle("FluentWinUI3");
@@ -46,6 +47,9 @@ void PetWindow::updateSession(const Session& session)
     details_ = QString("Agent: %1\nSession: %2\nProject: %3\nDirectory: %4\nTerminal: %5\nPet: %6\nState: %7\n\nSimulated session\nDrag to move. Arrow keys: 10 px; Shift: 1 px.\nDouble-click / Enter: details. Right-click / Shift+F10: menu.")
         .arg(name_, id_, QString::fromStdString(session.project().name()), directory_,
              QString::fromStdString(session.terminalType()), appearance_, state_);
+    if (!simulated_) details_.replace("Simulated session", interactive_
+        ? "Interactive Codex (trusted hooks; no terminal text)\nCompleted means Stop hook observed, not verified success."
+        : "Codex exec session (structured JSON lifecycle)");
     setTitle(name_ + " — Dime&Penny"); emit changed();
 }
 QPoint PetWindow::constrainedPosition(QPoint desired, QSize size, QRect area)

@@ -66,18 +66,18 @@ void transitionMatrix()
                                 S::ApprovalNeeded, S::Completed, S::Error, S::Disconnected};
     constexpr std::array events{E::SessionConnected, E::TaskStarted, E::TaskCompleted,
                                 E::ApprovalRequested, E::ApprovalResolved,
-                                E::SessionDisconnected, E::SessionError};
+                                E::SessionDisconnected, E::SessionError, E::TaskInterrupted};
     using Cell = std::optional<S>;
     constexpr Cell x = std::nullopt;
-    const std::array<std::array<Cell, 7>, 8> expected{{
-        {x, x, x, x, x, x, x},
-        {S::Active, x, x, x, x, S::Disconnected, S::Error},
-        {x, S::Working, x, x, x, S::Disconnected, S::Error},
-        {x, x, S::Completed, S::ApprovalNeeded, x, S::Disconnected, S::Error},
-        {x, x, x, x, S::Working, S::Disconnected, S::Error},
-        {x, S::Working, x, x, x, S::Disconnected, S::Error},
-        {x, x, x, x, x, S::Disconnected, x},
-        {x, x, x, x, x, x, x}
+    const std::array<std::array<Cell, 8>, 8> expected{{
+        {x, x, x, x, x, x, x, x},
+        {S::Active, x, x, x, x, S::Disconnected, S::Error, x},
+        {x, S::Working, x, x, x, S::Disconnected, S::Error, x},
+        {x, x, S::Completed, S::ApprovalNeeded, x, S::Disconnected, S::Error, S::Active},
+        {x, x, x, x, S::Working, S::Disconnected, S::Error, S::Active},
+        {x, S::Working, x, x, x, S::Disconnected, S::Error, x},
+        {x, x, x, x, x, S::Disconnected, x, x},
+        {x, x, x, x, x, x, x, x}
     }};
     for (std::size_t row = 0; row < states.size(); ++row) {
         for (std::size_t col = 0; col < events.size(); ++col) {

@@ -10,7 +10,7 @@ class PetWindow final : public QQuickView {
     Q_PROPERTY(QString details READ details NOTIFY changed)
     Q_PROPERTY(bool onTop READ onTop NOTIFY changed)
 public:
-    explicit PetWindow(const Session& session);
+    explicit PetWindow(const Session& session, bool simulated = true, bool interactive = false);
     ~PetWindow() override;
     void updateSession(const Session& session);
     QString sessionId() const { return id_; }
@@ -38,6 +38,8 @@ signals:
     void activationRequested();
 private:
     QString id_, name_, appearance_, state_, directory_, details_;
+    bool simulated_;
+    bool interactive_;
     QPoint dragOffset_;
     void watchScreen(QScreen* screen);
 };

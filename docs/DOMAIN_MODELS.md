@@ -18,7 +18,8 @@ blank values and ASCII control characters. Callers at UI and protocol boundaries
 must catch validation errors. Values are owned, with read-only accessors.
 
 Event types are `SessionConnected`, `TaskStarted`, `TaskCompleted`,
-`ApprovalRequested`, `ApprovalResolved`, `SessionDisconnected`, and `SessionError`.
+`ApprovalRequested`, `ApprovalResolved`, `SessionDisconnected`, `SessionError`, and
+`TaskInterrupted` (added for interactive Codex hooks in Task 15B).
 Approval requests require a nonblank request ID and no decision; resolutions
 require that ID and an explicit approve/deny decision. Other events reject
 approval metadata. This models correlation only, not approval delivery or execution.

@@ -4,7 +4,7 @@
 #include <limits>
 
 namespace dimepenny::ipc {
-SimulatedBridge::SimulatedBridge(QString endpoint, QString sessionId, QString token,
+BridgeClient::BridgeClient(QString endpoint, QString sessionId, QString token,
                                QJsonObject registrationPayload, QObject* parent)
     : QObject(parent), endpoint_(std::move(endpoint)), sessionId_(std::move(sessionId)),
       payload_(std::move(registrationPayload))
@@ -20,37 +20,37 @@ SimulatedBridge::SimulatedBridge(QString endpoint, QString sessionId, QString to
         registrationId_ = registration.messageId;
         (void)write(registration);
     });
-    connect(&socket_, &QLocalSocket::readyRead, this, &SimulatedBridge::read);
+    connect(&socket_, &QLocalSocket::readyRead, this, &BridgeClient::read);
     connect(&socket_, &QLocalSocket::disconnected, this, [this] {
         if (!ready_ && !closing_) emit failed("connection_closed_before_registration");
         ready_ = false; deadline_.stop(); emit disconnected();
     });
     connect(&socket_, &QLocalSocket::errorOccurred, this, [this](auto) { fail("socket_error"); });
 }
-Message SimulatedBridge::make(const QString& type, QJsonObject payload) const
+Message BridgeClient::make(const QString& type, QJsonObject payload) const
 {
     return {protocolVersion, QUuid::createUuid().toString(QUuid::WithoutBraces), sessionId_,
         QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs), type, std::move(payload)};
 }
-void SimulatedBridge::resumeAfter(std::uint64_t lastSequence)
+void BridgeClient::resumeAfter(std::uint64_t lastSequence)
 {
     if (socket_.state() != QLocalSocket::UnconnectedState || lastEvent_)
         throw std::logic_error("Cannot reset a running simulator's sequence");
     exhausted_ = lastSequence == std::numeric_limits<quint64>::max();
     sequence_ = exhausted_ ? lastSequence : lastSequence + 1;
 }
-void SimulatedBridge::connectToServer()
+void BridgeClient::connectToServer()
 {
     if (socket_.state() != QLocalSocket::UnconnectedState) return;
     ready_ = false; closing_ = false; decoder_ = FrameDecoder{}; registrationId_.clear();
     deadline_.start(5000);
     socket_.connectToServer(endpoint_);
 }
-void SimulatedBridge::fail(const QString& reason)
+void BridgeClient::fail(const QString& reason)
 {
     ready_ = false; closing_ = true; deadline_.stop(); emit failed(reason); socket_.abort();
 }
-bool SimulatedBridge::write(const Message& message)
+bool BridgeClient::write(const Message& message)
 {
     if (socket_.state() != QLocalSocket::ConnectedState) return false;
     const auto frame = encodeFrame(message);
@@ -58,7 +58,7 @@ bool SimulatedBridge::write(const Message& message)
     if (socket_.write(frame) != frame.size()) { fail("write_error"); return false; }
     return true;
 }
-void SimulatedBridge::read()
+void BridgeClient::read()
 {
     if (socket_.state() != QLocalSocket::ConnectedState) return;
     try {
@@ -78,10 +78,10 @@ void SimulatedBridge::read()
             if (socket_.state() != QLocalSocket::ConnectedState) return;
             deadline_.start(20000);
         }
-        if (socket_.bytesAvailable()) QTimer::singleShot(0, this, &SimulatedBridge::read);
+        if (socket_.bytesAvailable()) QTimer::singleShot(0, this, &BridgeClient::read);
     } catch (const ProtocolError&) { fail("invalid_protocol"); }
 }
-bool SimulatedBridge::sendEvent(const QString& type, QJsonObject approval)
+bool BridgeClient::sendEvent(const QString& type, QJsonObject approval)
 {
     if (!ready_ || exhausted_) return false;
     QJsonObject payload{{"eventType", type}, {"sequence", QString::number(sequence_)}};
@@ -93,15 +93,15 @@ bool SimulatedBridge::sendEvent(const QString& type, QJsonObject approval)
     else ++sequence_;
     return true;
 }
-bool SimulatedBridge::replayLastEvent() { return ready_ && lastEvent_ && write(*lastEvent_); }
-bool SimulatedBridge::sendMalformedFrame()
+bool BridgeClient::replayLastEvent() { return ready_ && lastEvent_ && write(*lastEvent_); }
+bool BridgeClient::sendMalformedFrame()
 {
     if (!ready_) return false;
     const auto bytes = QByteArray::fromHex("000000017b"); // Unterminated JSON object.
     if (socket_.bytesToWrite() + bytes.size() > 4 * maxReadBytes) return false;
     return socket_.write(bytes) == bytes.size();
 }
-void SimulatedBridge::disconnectFromServer()
+void BridgeClient::disconnectFromServer()
 {
     closing_ = true;
     if (ready_) (void)write(make("disconnect", {{"reason", "simulated_session_finished"}}));

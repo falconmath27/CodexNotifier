@@ -1,6 +1,7 @@
 #pragma once
 #include "dimepenny/application/event_processor.h"
 #include "dimepenny/ipc/simulated_bridge.h"
+#include "dimepenny/integration/interactive_server.h"
 #include <QQuickView>
 #include <QVariantList>
 #include <QMap>
@@ -31,6 +32,9 @@ public:
     Q_INVOKABLE void configure(const QString& directory, const QString& terminal, int companionType);
     Q_INVOKABLE QString localPath(const QUrl& url) const;
     Q_INVOKABLE void activate();
+    // Opt-in entry for CLI-launched real runs. Normal UI activation remains simulated.
+    void activateCodex(const QString& executable, const QString& prompt);
+    bool enableInteractive(const QString& endpoint = InteractiveServer::defaultEndpoint());
     Q_INVOKABLE void reconnectSession(const QString& id);
     Q_INVOKABLE void showPet(const QString& id);
     Q_INVOKABLE void showDetails(const QString& id);
@@ -50,6 +54,10 @@ private:
     QMap<QString, QString> names_;
     QMap<QString, PetWindow*> pets_;
     QSet<QString> failed_;
+    QSet<QString> realSessions_;
+    QSet<QString> interactiveSessions_;
+    QMap<QString, QString> interactiveIdentities_;
+    InteractiveServer* interactive_ = nullptr;
     QSet<QString> dirtyPets_;
     QTimer refreshTimer_;
     QString validationError() const;
@@ -59,5 +67,6 @@ private:
     void flushRefresh();
     void wireBridge(const QString& id, ipc::SimulatedBridge* bridge);
     void saveWindowSettings();
+    InteractiveRegistration registerInteractive(const QString& directory, const QString& id);
 };
 }

@@ -5,6 +5,10 @@ add_library(dimepenny_core STATIC
     ipc/simulated_bridge.cpp
     application/event_processor.cpp
     persistence/sqlite_store.cpp
+    integration/codex_exec.cpp
+    integration/interactive_server.cpp
+    ${PROJECT_SOURCE_DIR}/include/dimepenny/integration/interactive_server.h
+    ${PROJECT_SOURCE_DIR}/include/dimepenny/integration/codex_exec.h
     ${PROJECT_SOURCE_DIR}/include/dimepenny/application/event_processor.h
     ${PROJECT_SOURCE_DIR}/include/dimepenny/ipc/simulated_bridge.h
     ${PROJECT_SOURCE_DIR}/include/dimepenny/ipc/local_server.h

@@ -9,16 +9,19 @@ session; these types do not provide locking.
 
 An em dash means `InvalidTransition`. Every cell is covered by the tests.
 
-| Current state | SessionConnected | TaskStarted | TaskCompleted | ApprovalRequested | ApprovalResolved | SessionDisconnected | SessionError |
-|---|---|---|---|---|---|---|---|
-| Unregistered | — | — | — | — | — | — | — |
-| Connecting | Active | — | — | — | — | Disconnected | Error |
-| Active | — | Working | — | — | — | Disconnected | Error |
-| Working | — | — | Completed | ApprovalNeeded | — | Disconnected | Error |
-| ApprovalNeeded | — | — | — | — | Working | Disconnected | Error |
-| Completed | — | Working | — | — | — | Disconnected | Error |
-| Error | — | — | — | — | — | Disconnected | — |
-| Disconnected | — | — | — | — | — | — | — |
+| Current state | SessionConnected | TaskStarted | TaskCompleted | ApprovalRequested | ApprovalResolved | SessionDisconnected | SessionError | TaskInterrupted |
+|---|---|---|---|---|---|---|---|---|
+| Unregistered | — | — | — | — | — | — | — | — |
+| Connecting | Active | — | — | — | — | Disconnected | Error | — |
+| Active | — | Working | — | — | — | Disconnected | Error | — |
+| Working | — | — | Completed | ApprovalNeeded | — | Disconnected | Error | Active |
+| ApprovalNeeded | — | — | — | — | Working | Disconnected | Error | Active |
+| Completed | — | Working | — | — | — | Disconnected | Error | — |
+| Error | — | — | — | — | — | Disconnected | — | — |
+| Disconnected | — | — | — | — | — | — | — | — |
+
+Task 15B adds `TaskInterrupted`: an interrupted turn returns to Active/idle and
+clears pending approval correlation without claiming successful completion.
 
 The local command `beginConnecting(session)` moves Unregistered, Disconnected or
 Error to Connecting. Other source states reject it. A successful bridge handshake

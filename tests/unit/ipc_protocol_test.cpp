@@ -43,7 +43,7 @@ void roundTrips()
         message("error", {{"code", "invalid_state"}, {"message", "Event rejected"}, {"inReplyTo", "m-0"}}),
         message("approval_response", {{"requestId", "r-1"}, {"decision", "deny"}})};
     for (const auto* type : {"SessionConnected", "TaskStarted", "TaskCompleted", "ApprovalRequested",
-                             "ApprovalResolved", "SessionDisconnected", "SessionError"}) {
+                             "ApprovalResolved", "SessionDisconnected", "SessionError", "TaskInterrupted"}) {
         QJsonObject payload{{"eventType", type}, {"sequence", "18446744073709551615"}};
         if (QString{type} == "ApprovalRequested") payload.insert("approval", QJsonObject{{"requestId", "r-1"}});
         if (QString{type} == "ApprovalResolved") payload.insert("approval", QJsonObject{{"requestId", "r-1"}, {"decision", "approve"}});

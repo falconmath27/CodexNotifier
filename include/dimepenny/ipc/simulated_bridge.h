@@ -3,11 +3,12 @@
 #include <optional>
 
 namespace dimepenny::ipc {
-// Simulator only: never reads or controls a real Codex process.
-class SimulatedBridge final : public QObject {
+// Authenticated lifecycle transport shared by simulation and real adapters.
+// replayLastEvent/sendMalformedFrame remain explicit test hooks.
+class BridgeClient final : public QObject {
     Q_OBJECT
 public:
-    SimulatedBridge(QString endpoint, QString sessionId, QString token,
+    BridgeClient(QString endpoint, QString sessionId, QString token,
                     QJsonObject registrationPayload, QObject* parent = nullptr);
     void connectToServer(); // Reconnect retains sequence and last event.
     void resumeAfter(std::uint64_t lastSequence); // Before the first connection only.
@@ -37,4 +38,5 @@ private:
     void read();
     void fail(const QString& reason);
 };
+using SimulatedBridge = BridgeClient; // Source-compatible simulator API.
 }

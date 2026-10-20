@@ -18,6 +18,7 @@ AgentEventType eventType(const QString& name)
     if (name == "SessionConnected") return AgentEventType::SessionConnected;
     if (name == "TaskStarted") return AgentEventType::TaskStarted;
     if (name == "TaskCompleted") return AgentEventType::TaskCompleted;
+    if (name == "TaskInterrupted") return AgentEventType::TaskInterrupted;
     if (name == "ApprovalRequested") return AgentEventType::ApprovalRequested;
     if (name == "ApprovalResolved") return AgentEventType::ApprovalResolved;
     if (name == "SessionDisconnected") return AgentEventType::SessionDisconnected;

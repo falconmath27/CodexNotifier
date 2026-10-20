@@ -51,10 +51,12 @@ public:
             if (event == AgentEventType::TaskStarted) return AgentState::Working;
             break;
         case AgentState::Working:
+            if (event == AgentEventType::TaskInterrupted) return AgentState::Active;
             if (event == AgentEventType::TaskCompleted) return AgentState::Completed;
             if (event == AgentEventType::ApprovalRequested) return AgentState::ApprovalNeeded;
             break;
         case AgentState::ApprovalNeeded:
+            if (event == AgentEventType::TaskInterrupted) return AgentState::Active;
             if (event == AgentEventType::ApprovalResolved) return AgentState::Working;
             break;
         case AgentState::Error:

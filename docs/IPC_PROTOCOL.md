@@ -106,7 +106,9 @@ authentication/registration flow has completed.
 ### Lifecycle events
 
 `eventType` is one of SessionConnected, TaskStarted, TaskCompleted,
-ApprovalRequested, ApprovalResolved, SessionDisconnected or SessionError.
+ApprovalRequested, ApprovalResolved, SessionDisconnected, SessionError or
+TaskInterrupted. Task 15B adds TaskInterrupted to the v1 lifecycle vocabulary;
+use the matching application and helper build (older receivers reject unknown events).
 
 `sequence` is a **decimal string**, not a JSON number, in the uint64 range
 0-18446744073709551615. No sign, whitespace or leading zeros (except `"0"`). This

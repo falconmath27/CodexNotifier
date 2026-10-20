@@ -1,5 +1,6 @@
 #include "activation_window.h"
 #include "pet_window.h"
+#include "dimepenny/integration/codex_exec.h"
 #include <QCloseEvent>
 #include <QColor>
 #include <QDateTime>
@@ -60,6 +61,16 @@ ActivationWindow::ActivationWindow(const QString& databasePath)
             if (appearance < 0) throw StorageError("Unknown saved pet appearance");
             appearances_.insert(id, static_cast<int>(appearance));
             names_.insert(id, QString::fromStdString(session->pet().name()));
+            const auto source = processor_.storage()->setting("source/" + id);
+            if (source == "codex-exec" || source == "codex-interactive") {
+                realSessions_.insert(id);
+                if (source == "codex-interactive") {
+                    interactiveSessions_.insert(id);
+                    const auto codexId = processor_.storage()->setting("codex-thread/" + id);
+                    if (!codexId.isEmpty()) interactiveIdentities_.insert(id, codexId);
+                }
+                continue; // Never reconnect a real run using a simulated bridge.
+            }
             auto* bridge = new ipc::SimulatedBridge(endpoint_, id, processor_.server().authorize(id), SqliteStore::registrationPayload(*session), this);
             if (session->lastSequence()) bridge->resumeAfter(*session->lastSequence());
             bridges_.insert(id, bridge); wireBridge(id, bridge);
@@ -74,19 +85,24 @@ ActivationWindow::ActivationWindow(const QString& databasePath)
 }
 ActivationWindow::~ActivationWindow()
 {
+    delete interactive_; interactive_ = nullptr;
     closing_ = true;
     refreshTimer_.stop();
     saveWindowSettings();
+    for (auto* adapter : findChildren<CodexExec*>()) delete adapter;
     for (auto* pet : pets_) delete pet;
-    for (auto* bridge : bridges_) { bridge->disconnect(this); delete bridge; }
+    const auto bridges = bridges_;
+    for (auto* bridge : bridges) { bridge->disconnect(this); delete bridge; }
     processor_.disconnect(this); processor_.server().stop();
     setSource(QUrl());
 }
 void ActivationWindow::closeEvent(QCloseEvent* event)
 {
+    if (interactive_) interactive_->stop();
     closing_ = true;
     refreshTimer_.stop();
     saveWindowSettings();
+    for (auto* adapter : findChildren<CodexExec*>()) delete adapter;
     for (auto* pet : pets_) pet->hide();
     processor_.server().stop();
     QQuickView::closeEvent(event);
@@ -167,7 +183,9 @@ void ActivationWindow::activate()
 }
 void ActivationWindow::wireBridge(const QString& id, ipc::SimulatedBridge* bridge)
 {
-    connect(bridge, &ipc::SimulatedBridge::registered, this, [bridge] { (void)bridge->sendEvent("SessionConnected"); });
+    connect(bridge, &ipc::SimulatedBridge::registered, this, [this, id, bridge] {
+        if (!realSessions_.contains(id)) (void)bridge->sendEvent("SessionConnected");
+    });
     connect(bridge, &ipc::SimulatedBridge::failed, this, [this, id](const QString& reason) {
         failed_.insert(id); if (pending_ == id) pending_.clear();
         connection_ = "Connection failed for " + names_.value(id) + ": " + reason;
@@ -184,6 +202,122 @@ void ActivationWindow::wireBridge(const QString& id, ipc::SimulatedBridge* bridg
         refresh();
     });
 }
+void ActivationWindow::activateCodex(const QString& executable, const QString& prompt)
+{
+    if (!canActivate()) { emit changed(); return; }
+    const auto id = uniqueId();
+    // Persist source intent before registration so crash recovery cannot simulate it.
+    try {
+        if (auto* store = processor_.storage()) store->setSetting("source/" + id, "codex-exec");
+    } catch (const StorageError& error) {
+        connection_ = "Cannot save Codex source: " + QString::fromUtf8(error.what()); emit changed(); return;
+    }
+    auto* bridge = new ipc::BridgeClient(endpoint_, id, processor_.server().authorize(id), payload(id), this);
+    auto* adapter = new CodexExec(this);
+    const auto appearance = nextAppearance();
+    const auto name = nextName();
+    realSessions_.insert(id);
+    bridges_.insert(id, bridge); appearances_.insert(id, appearance); names_.insert(id, name);
+    pending_ = id;
+    wireBridge(id, bridge);
+    const auto project = directory_;
+    connect(bridge, &ipc::BridgeClient::registered, adapter, [adapter, executable, project, prompt] {
+        adapter->start(executable, project, prompt);
+    });
+    connect(adapter, &CodexExec::lifecycle, this, [this, id, bridge, adapter](const QString& event) {
+        if (event == "SessionConnected") {
+            try {
+                if (auto* store = processor_.storage()) store->setSetting("codex-thread/" + id, adapter->threadId());
+            } catch (const StorageError& error) {
+                connection_ = "Cannot save Codex thread: " + QString::fromUtf8(error.what()); emit changed();
+            }
+        }
+        if (!bridge->sendEvent(event)) {
+            connection_ = "Codex lifecycle delivery failed"; emit changed();
+            adapter->deleteLater(); bridge->disconnectFromServer();
+        }
+    });
+    connect(adapter, &CodexExec::diagnostic, this, [this](const QString& reason) { connection_ = reason; emit changed(); });
+    connect(adapter, &CodexExec::finished, this, [this, id](bool success) {
+        if (pending_ == id) pending_.clear();
+        connection_ = success ? "Codex run completed" : "Codex run failed";
+        refresh();
+    });
+    connect(bridge, &ipc::BridgeClient::messageReceived, adapter, [this, adapter, bridge](const ipc::Message& message) {
+        if (message.type == "error") {
+            connection_ = "Codex lifecycle update rejected; stopping the adapter"; emit changed();
+            adapter->deleteLater(); bridge->disconnectFromServer();
+        }
+    });
+    // If the pet connection breaks, do not let a detached adapter continue working.
+    connect(bridge, &ipc::BridgeClient::disconnected, adapter, &QObject::deleteLater);
+    connection_ = "Connecting Codex: " + names_.value(id); refresh(); bridge->connectToServer();
+}
+bool ActivationWindow::enableInteractive(const QString& endpoint)
+{
+    if (!listening_ || closing_ || interactive_) return false;
+    auto* server = new InteractiveServer([this](const QString& directory, const QString& id) {
+        return registerInteractive(directory, id);
+    }, this);
+    connect(server, &InteractiveServer::diagnostic, this, [this](const QString& text) {
+        connection_ = text; emit changed();
+    });
+    if (!server->listen(endpoint)) {
+        connection_ = "Interactive endpoint unavailable: " + server->errorString();
+        delete server; emit changed(); return false;
+    }
+    interactive_ = server; return true;
+}
+InteractiveRegistration ActivationWindow::registerInteractive(const QString& directory, const QString& requestedId)
+{
+    if (!listening_ || closing_) return {};
+    const auto id = requestedId.isEmpty() ? uniqueId() : requestedId;
+    QJsonObject registration;
+    const auto* existing = processor_.registry().find(SessionId{id.toStdString()});
+    if (existing) {
+        if (!interactiveSessions_.contains(id) || existing->state() != AgentState::Disconnected
+            || bridges_.contains(id)
+            || QFileInfo(QString::fromStdWString(existing->project().directory().wstring())).canonicalFilePath() != directory) return {};
+        registration = SqliteStore::registrationPayload(*existing);
+    } else {
+        if (appearances_.size() >= 10 || bridges_.contains(id)) return {};
+        // External launches do not change the activation form or its pending state.
+        const auto previousDirectory = directory_, previousTerminal = terminal_;
+        const auto previousType = companionType_;
+        directory_ = directory; terminal_ = "PowerShell"; companionType_ = dimeReserved() ? 1 : 0;
+        const auto appearance = nextAppearance();
+        const auto name = nextName();
+        registration = payload(id);
+        directory_ = previousDirectory; terminal_ = previousTerminal; companionType_ = previousType;
+        if (appearance < 0) return {};
+        (void)ipc::encodeJson({ipc::protocolVersion, uniqueId(), id,
+            QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs), "register", registration});
+        if (auto* store = processor_.storage()) store->setSetting("source/" + id, "codex-interactive");
+        appearances_.insert(id, appearance); names_.insert(id, name);
+        interactiveSessions_.insert(id); realSessions_.insert(id);
+    }
+    auto* bridge = new ipc::BridgeClient(endpoint_, id, processor_.server().authorize(id), registration, this);
+    if (existing && existing->lastSequence()) bridge->resumeAfter(*existing->lastSequence());
+    bridges_.insert(id, bridge);
+    wireBridge(id, bridge);
+    connect(bridge, &QObject::destroyed, this, [this, id, bridge] {
+        if (bridges_.value(id) == bridge) bridges_.remove(id);
+        processor_.server().revoke(id);
+        if (!processor_.registry().find(SessionId{id.toStdString()})) {
+            appearances_.remove(id); names_.remove(id);
+            interactiveSessions_.remove(id); realSessions_.remove(id);
+        }
+    });
+    refresh();
+    return {id, bridge, [this, id](const QString& codexId) {
+        const auto previous = interactiveIdentities_.value(id);
+        if (!previous.isEmpty()) return previous == codexId;
+        if (interactiveIdentities_.values().contains(codexId)) return false;
+        if (auto* store = processor_.storage()) store->setSetting("codex-thread/" + id, codexId);
+        interactiveIdentities_.insert(id, codexId);
+        return true;
+    }};
+}
 void ActivationWindow::refresh()
 {
     // Bound presentation work to one batch per frame. The processor still
@@ -199,7 +333,7 @@ void ActivationWindow::flushRefresh()
         const auto id = QString::fromStdString(session->id().value());
         auto* pet = pets_.value(id);
         if (!pet) {
-            pet = new PetWindow(*session);
+            pet = new PetWindow(*session, !realSessions_.contains(id), interactiveSessions_.contains(id));
             pets_.insert(id, pet); pet->resetPosition(static_cast<int>(pets_.size()) - 1);
             connect(pet, &PetWindow::reconnectRequested, this, &ActivationWindow::reconnectSession);
             connect(pet, &PetWindow::activationRequested, this, [this, id] { showNormal(); raise(); requestActivate(); emit selectSession(id); });
@@ -210,12 +344,16 @@ void ActivationWindow::flushRefresh()
         sessions_.append(QVariantMap{{"sessionId", id}, {"name", QString::fromStdString(session->pet().name())},
             {"appearance", appearances_.value(id) == 0 ? "Dime" : "Penny"}, {"terminal", QString::fromStdString(session->terminalType())},
             {"state", QString::fromLatin1(state.data(), static_cast<qsizetype>(state.size()))},
-            {"canReconnect", pending_.isEmpty() && session->state() == AgentState::Disconnected}});
+            {"canReconnect", !realSessions_.contains(id) && pending_.isEmpty() && session->state() == AgentState::Disconnected}});
     }
     emit changed();
 }
 void ActivationWindow::reconnectSession(const QString& id)
 {
+    if (realSessions_.contains(id)) {
+        connection_ = "This is a real Codex run. Start a new explicit run; simulation cannot reconnect it.";
+        emit changed(); return;
+    }
     if (!bridges_.contains(id) || !pending_.isEmpty() || !listening_ || closing_) return;
     const auto* session = processor_.registry().find(SessionId{id.toStdString()});
     if (!session || session->state() != AgentState::Disconnected) return;

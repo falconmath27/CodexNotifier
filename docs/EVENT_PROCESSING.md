@@ -28,7 +28,7 @@ used without an admission handler for transport-only tests.
    verifies the binding match and checks that the session is currently connected.
 5. The converter maps messageId to AgentEvent.eventId, sessionId to SessionId,
    timestamp to system-clock occurredAt, and the decimal sequence string to uint64.
-   All seven lifecycle event types and approval correlation metadata are supported.
+   All eight lifecycle event types (including TaskInterrupted) and approval correlation metadata are supported.
 6. The registry dispatches to that session's state machine. The existing accepted-ID
    history detects duplicates before applying transitions. Ordering and approval
    request checks remain enforced by the state machine.

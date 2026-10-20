@@ -15,7 +15,8 @@ enum class AgentEventType {
     ApprovalRequested,
     ApprovalResolved,
     SessionDisconnected,
-    SessionError
+    SessionError,
+    TaskInterrupted
 };
 
 enum class ApprovalDecision { Approve, Deny };
@@ -53,6 +54,7 @@ public:
         case AgentEventType::SessionConnected:
         case AgentEventType::TaskStarted:
         case AgentEventType::TaskCompleted:
+        case AgentEventType::TaskInterrupted:
         case AgentEventType::SessionDisconnected:
         case AgentEventType::SessionError:
             if (approval_) throw std::invalid_argument("Non-approval event cannot contain approval metadata");

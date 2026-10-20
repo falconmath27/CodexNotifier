@@ -154,7 +154,7 @@ To enforce warnings as errors during development, add `-DDIMEPENNY_WARNINGS_AS_E
 ctest --test-dir build --output-on-failure
 ```
 
-The suite contains 15 CTest targets covering metadata, domain models, state transitions, registry rules, IPC, simulated bridges, event processing, SQLite persistence, activation, and desktop pet windows. IPC tests require permission to open local named pipes. UI tests use Qt's offscreen platform. Persistence tests use temporary databases, never the user's app data.
+The suite contains 17 CTest targets covering metadata, domain models, state transitions, registry rules, IPC, simulated bridges, Codex exec and interactive PowerShell adapters, event processing, SQLite persistence, activation, and desktop pet windows. IPC tests require permission to open local named pipes. UI tests use Qt's offscreen platform. Persistence tests use temporary databases, never the user's app data. Adapter tests launch deterministic fixtures, not live model requests.
 
 ### Run the executables
 
@@ -225,6 +225,21 @@ The desktop restores reserved pets without connecting their bridges automaticall
 
 Recovery tests seed committed snapshots in all eight lifecycle states (simulating an abrupt exit without a graceful-disconnect write), check database and in-memory states, inject a recovery-write failure, and verify all ten UI assignments across restart. These tests use temporary databases and local authenticated sockets, not real Codex sessions.
 
+### Real Codex adapter (Task 15)
+
+An opt-in adapter launches a new `codex exec --json` run and maps explicit thread/turn lifecycle events to its pet. Normal activation and the bridge demo remain simulated. No terminal text is used to guess activity. Read [the verified contract and launch instructions](docs/CODEX_INTEGRATION.md) for supported states, safety boundaries and restart behavior. This first adapter does not attach to existing Codex windows, resume old real threads, or handle interactive approvals.
+
+### Interactive PowerShell integration (Task 15B)
+
+Launch interactive Codex from a project folder with `tools/Start-DimePennyCodex.ps1`.
+It assigns one pet per terminal, uses trusted structured Codex hooks (no terminal
+text parsing), and isolates heartbeats, lifecycle events and disconnects. The
+existing simulation and noninteractive exec modes remain available.
+
+**One-time hook installation and `/hooks` review are required.** See
+[setup, launch and reconnect instructions](docs/INTERACTIVE_POWERSHELL.md).
+Ordinary `codex` launched without the wrapper is not automatically tracked.
+
 ### Qt Quick presentation
 
 The app uses QGuiApplication and QQuickView; it no longer links Qt Widgets. The screens in `app/qml/Activation.qml` and `app/qml/Pet.qml` are embedded in the executable through `app/ui.qrc`. Qt Quick Controls use FluentWinUI3 with an explicit light theme. The C++ presentation adapters expose properties and commands to QML; EventProcessor and the domain remain responsible for authenticated state changes.
@@ -239,7 +254,7 @@ Run the executables from the same UCRT64 terminal used for the build so the matc
 
 ## Development status
 
-Version `0.1.0` includes domain and IPC components, a fake-session demo, the activation interface, lifecycle-animated desktop pets and SQLite persistence. Real Codex integration, additional sprite artwork and approval execution remain planned.
+Version `0.1.0` includes domain and IPC components, a fake-session demo, the activation interface, lifecycle-animated desktop pets, SQLite persistence, an opt-in Codex exec adapter, and a trusted-hook interactive PowerShell launcher. Automatic attachment to already-running Codex terminals, additional sprite artwork and approval execution remain planned.
 
 The implemented registry enforces the 10-session limit, rejects duplicate identities, and assigns stable pet identities. Later milestones in [PLAN.md](PLAN.md) extend animation, verified Codex lifecycle events, and approval handling.
 

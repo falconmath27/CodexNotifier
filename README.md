@@ -163,13 +163,13 @@ The suite contains 14 CTest targets covering metadata, domain models, state tran
 ./build/bridge/DimePennyBridge.exe --demo
 ```
 
-`DimePenny.exe` opens the activation interface. Enter an agent name, browse to an existing project directory, select terminal metadata and an unused pet color, then activate a simulated session. The UI shows validation, connection state and the 10-session capacity. A disconnected session keeps its slot and color; select its row to reconnect. Registrations last for the app's lifetime and are not yet persisted.
+`DimePenny.exe` opens the activation interface. Choose **Dime** or **Pennies**, browse to an existing project directory, select terminal metadata, then activate a simulated session. Only one orange **Dime** and nine **Pennies** can be activated. Pennies receive unused colors automatically and are named **Penny1** through **Penny9** in activation order. The UI shows availability and connection state. A disconnected session keeps its name, slot and color; select its row to reconnect. Registrations last for the app's lifetime and are not yet persisted.
 
-Activation uses an in-process simulated bridge over authenticated local IPC; it does not launch a terminal or control Codex. Agent names are stored as the pet's display name in the existing registration protocol. Color choices reserve identities, are included in the pet registration payload, and select the matching idle sprite animation.
+Activation uses an in-process simulated bridge over authenticated local IPC; it does not launch a terminal or control Codex. Generated names are stored as the pet's display name in the existing registration protocol. Automatically assigned colors reserve identities, are included in the pet registration payload, and select the matching idle sprite animation. The activation controller enforces both companion limits, including while a connection is pending.
 
 ### Desktop pets (Task 10)
 
-Each registered session gets one transparent, frameless, always-on-top tool window. It renders the selected animated pixel pet with the agent name, color key, and live state; states without dedicated sprite artwork retain the accessible paw fallback.
+Each registered session gets one transparent, frameless, always-on-top tool window. It renders the assigned animated pixel pet with its generated name, companion type, and live state; states without dedicated sprite artwork retain the accessible paw fallback.
 
 - Drag with the left mouse button. Positions stay inside a monitor's available work area, including monitors with negative coordinates. Display/work-area changes bring misplaced pets back on screen.
 - With keyboard focus, use arrow keys to move 10 pixels or Shift + arrow for 1 pixel.
@@ -196,6 +196,14 @@ Unregistered, connecting, completed, error and disconnected states retain labell
 The UI tests drive the real state machine through all six states, approval resolution, disconnect/reconnect, motion toggling, hidden-window pausing, and cross-session isolation. Set `DIMEPENNY_CAPTURE_UI=1` when running the pet test to save a six-state preview as `pet-visual-states.png` in its working directory.
 
 Automated tests cover flags, alpha transparency, drag/keyboard positioning, bounds, menu actions, details updates, session isolation, ownership, and activation/reconnect integration. A real multi-monitor Windows check is still recommended for compositor stacking, taskbar avoidance, monitor unplugging, and mixed-DPI behavior.
+
+### Multiple pets (Task 12)
+
+Up to ten sessions can remain connected simultaneously: one Dime and nine uniquely named Pennies with reserved idle-color appearances. Each session ID owns one pet window for the app's lifetime. Reconnect reuses that window, name, appearance, position, and hidden state; it does not allocate another slot. An eleventh activation is rejected.
+
+Validated events mark only their own session's pet for an update. Presentation changes are coalesced on a 16 ms timer, so event bursts do not rebuild every pet or the activation list for every message. Every event still passes through validation and the state machine; only intermediate visual snapshots may be skipped. Hidden pets remain hidden, and shutdown cancels pending presentation updates.
+
+The multi-pet integration test exercises ten authenticated bridges with 400 interleaved lifecycle events, independent final states, duplicate suppression, a UI event-loop timer, and reconnect identity. Idle sprites have distinct colors; shared working/approval artwork remains identifiable by each pet's unique name. The compact growing sidebar is a separate layout milestone; this task retains independent pet windows.
 
 ### Qt Quick presentation
 

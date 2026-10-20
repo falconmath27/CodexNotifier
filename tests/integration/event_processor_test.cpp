@@ -114,6 +114,8 @@ void exercise()
     check(c.sendMalformedFrame());
     check(wait([&] { return state("c") == AgentState::Disconnected; }));
     check(state("a") == AgentState::Active && state("b") == AgentState::Active);
+    // Server and client observe a broken pipe on separate event-loop turns.
+    check(wait([&] { return !c.isReady(); }));
     c.connectToServer(); check(wait([&] { return c.isReady(); }));
     check(c.sendEvent("SessionConnected")); check(wait([&] { return state("c") == AgentState::Active; }));
 

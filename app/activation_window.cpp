@@ -10,6 +10,7 @@
 #include <QStyleHints>
 #include <QQuickStyle>
 #include <QUuid>
+#include <utility>
 static void initializeUiResources() { Q_INIT_RESOURCE(ui); }
 namespace dimepenny {
 namespace {
@@ -30,7 +31,11 @@ ActivationWindow::ActivationWindow()
     setResizeMode(QQuickView::SizeRootObjectToView);
     setMinimumSize({720, 640}); resize(1000, 760);
     rootContext()->setContextProperty("backend", this);
+    refreshTimer_.setSingleShot(true);
+    refreshTimer_.setInterval(16);
+    connect(&refreshTimer_, &QTimer::timeout, this, &ActivationWindow::flushRefresh);
     connect(&processor_, &EventProcessor::stateChanged, this, [this](const QString& id) {
+        dirtyPets_.insert(id);
         const auto* session = processor_.registry().find(SessionId{id.toStdString()});
         if (session && id == pending_ && session->state() == AgentState::Active) {
             pending_.clear(); connection_ = "Connected: " + names_.value(id);
@@ -45,6 +50,7 @@ ActivationWindow::ActivationWindow()
 ActivationWindow::~ActivationWindow()
 {
     closing_ = true;
+    refreshTimer_.stop();
     for (auto* pet : pets_) delete pet;
     for (auto* bridge : bridges_) { bridge->disconnect(this); delete bridge; }
     processor_.disconnect(this); processor_.server().stop();
@@ -53,13 +59,27 @@ ActivationWindow::~ActivationWindow()
 void ActivationWindow::closeEvent(QCloseEvent* event)
 {
     closing_ = true;
+    refreshTimer_.stop();
     for (auto* pet : pets_) pet->hide();
     processor_.server().stop();
     QQuickView::closeEvent(event);
 }
-void ActivationWindow::configure(const QString& name, const QString& directory, const QString& terminal, int appearance)
+void ActivationWindow::configure(const QString& directory, const QString& terminal, int companionType)
 {
-    name_ = name; directory_ = directory; terminal_ = terminal; appearance_ = appearance; emit changed();
+    directory_ = directory; terminal_ = terminal; companionType_ = companionType; emit changed();
+}
+int ActivationWindow::nextAppearance() const
+{
+    if (companionType_ == 0) return dimeReserved() ? -1 : 0;
+    if (companionType_ != 1) return -1;
+    for (int i = 1; i < appearances.size(); ++i)
+        if (!appearances_.values().contains(i)) return i;
+    return -1;
+}
+QString ActivationWindow::nextName() const
+{
+    if (nextAppearance() < 0) return {};
+    return companionType_ == 0 ? QString("Dime") : QString("Penny%1").arg(pennyCount() + 1);
 }
 QString ActivationWindow::localPath(const QUrl& url) const { return url.isLocalFile() ? QDir::toNativeSeparators(url.toLocalFile()) : QString{}; }
 QString ActivationWindow::validation() const
@@ -71,13 +91,14 @@ QString ActivationWindow::validationError() const
     if (!listening_ || closing_) return "The local server is offline. Restart the app to retry.";
     if (!pending_.isEmpty()) return "Connecting… waiting for the session";
     if (capacityUsed() >= 10) return "All 10 session slots are reserved.";
-    if (name_.trimmed().isEmpty()) return "Enter an agent name.";
+    if (companionType_ < 0 || companionType_ > 1) return "Choose Dime or Pennies.";
+    if (nextAppearance() < 0)
+        return companionType_ == 0 ? "Dime is already activated. Choose Pennies or reconnect Dime."
+                                   : "All 9 Pennies are reserved. Reconnect an existing Penny.";
     const QFileInfo path(directory_.trimmed());
     if (directory_.trimmed().isEmpty() || !path.isAbsolute() || !path.isDir() || !path.isReadable())
         return "Choose an existing, readable project folder.";
-    if (appearance_ < 0 || appearance_ >= appearances.size() || !terminals.contains(terminal_))
-        return "Choose a terminal and pet color.";
-    if (appearances_.values().contains(appearance_)) return "That color is reserved. Choose another or reconnect its session.";
+    if (!terminals.contains(terminal_)) return "Choose a terminal.";
     try {
         (void)ipc::encodeJson({ipc::protocolVersion, "validation", "validation",
             QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs), "register", payload("validation")});
@@ -87,9 +108,10 @@ QString ActivationWindow::validationError() const
 QJsonObject ActivationWindow::payload(const QString& id) const
 {
     const QFileInfo path(directory_.trimmed());
-    const auto color = appearanceColors.value(appearance_, QColor("#ff6f2c"));
+    const auto appearance = nextAppearance();
+    const auto color = appearanceColors.value(appearance, QColor("#ff6f2c"));
     return {{"project", QJsonObject{{"name", path.fileName().isEmpty() ? QString("Project") : path.fileName()}, {"directory", path.canonicalFilePath()}}},
-        {"pet", QJsonObject{{"id", id}, {"name", name_.trimmed()}, {"appearanceKey", appearances.value(appearance_).toLower()},
+        {"pet", QJsonObject{{"id", id}, {"name", nextName()}, {"appearanceKey", appearances.value(appearance).toLower()},
             {"color", QJsonObject{{"red", color.red()}, {"green", color.green()}, {"blue", color.blue()}}}}},
         {"terminalType", terminal_}};
 }
@@ -97,9 +119,11 @@ void ActivationWindow::activate()
 {
     if (!canActivate()) { emit changed(); return; }
     const auto id = uniqueId();
+    const auto name = nextName();
+    const auto appearance = nextAppearance();
     auto* bridge = new ipc::SimulatedBridge(endpoint_, id, processor_.server().authorize(id), payload(id), this);
-    bridges_.insert(id, bridge); appearances_.insert(id, appearance_);
-    names_.insert(id, name_.trimmed()); pending_ = id;
+    bridges_.insert(id, bridge); appearances_.insert(id, appearance);
+    names_.insert(id, name); pending_ = id;
     connect(bridge, &ipc::SimulatedBridge::registered, this, [bridge] { (void)bridge->sendEvent("SessionConnected"); });
     connect(bridge, &ipc::SimulatedBridge::failed, this, [this, id](const QString& reason) {
         failed_.insert(id); if (pending_ == id) pending_.clear();
@@ -120,7 +144,14 @@ void ActivationWindow::activate()
 }
 void ActivationWindow::refresh()
 {
+    // Bound presentation work to one batch per frame. The processor still
+    // validates and applies every event; only intermediate visual snapshots coalesce.
+    if (!closing_ && !refreshTimer_.isActive()) refreshTimer_.start();
+}
+void ActivationWindow::flushRefresh()
+{
     if (closing_) return;
+    const auto dirty = std::exchange(dirtyPets_, {});
     sessions_.clear();
     for (const auto* session : processor_.registry().activeSessions()) {
         const auto id = QString::fromStdString(session->id().value());
@@ -132,10 +163,10 @@ void ActivationWindow::refresh()
             connect(pet, &PetWindow::activationRequested, this, [this, id] { showNormal(); raise(); requestActivate(); emit selectSession(id); });
             if (pet->status() == QQuickView::Ready) pet->showPet();
             else connection_ = "Could not load a pet window. See application diagnostics.";
-        } else pet->updateSession(*session);
+        } else if (dirty.contains(id)) pet->updateSession(*session);
         const auto state = toString(session->state());
         sessions_.append(QVariantMap{{"sessionId", id}, {"name", QString::fromStdString(session->pet().name())},
-            {"appearance", appearances.value(appearances_.value(id))}, {"terminal", QString::fromStdString(session->terminalType())},
+            {"appearance", appearances_.value(id) == 0 ? "Dime" : "Penny"}, {"terminal", QString::fromStdString(session->terminalType())},
             {"state", QString::fromLatin1(state.data(), static_cast<qsizetype>(state.size()))},
             {"canReconnect", pending_.isEmpty() && session->state() == AgentState::Disconnected}});
     }

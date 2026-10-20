@@ -13,8 +13,8 @@ Pane {
     property string selectedId: ""
     background: Rectangle { color: "#f3f5fa" }
     function configure() {
-        if (!agent || !folder || !terminal || !appearance) return
-        backend.configure(agent.text, folder.text, terminal.currentText, appearance.currentIndex)
+        if (!folder || !terminal || !companion) return
+        backend.configure(folder.text, terminal.currentText, companion.currentIndex)
     }
     Component.onCompleted: configure()
     Connections {
@@ -63,12 +63,20 @@ Pane {
                         Label { text: "New session"; font.pixelSize: 21; font.bold: true; color: "#18243a" }
                         Label { text: "Give your next project a companion."; color: "#58657a"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                         Item { height: 6 }
-                        Label { text: "Agent name" }
-                        TextField {
-                            id: agent; objectName: "agentName"
-                            Layout.fillWidth: true; placeholderText: "Frontend helper"
-                            Accessible.name: "Agent name"
-                            onTextChanged: root.configure()
+                        Label { text: "Companion" }
+                        ComboBox {
+                            id: companion; objectName: "companionType"; Layout.fillWidth: true
+                            model: ["Dime", "Pennies"]
+                            Accessible.name: "Companion type"
+                            onCurrentIndexChanged: root.configure()
+                        }
+                        Label {
+                            text: (backend.dimeReserved ? "1" : "0") + " / 1 Dime · " + backend.pennyCount + " / 9 Pennies"
+                            color: "#58657a"; Layout.fillWidth: true
+                        }
+                        Label {
+                            text: backend.nextName ? "Next companion: " + backend.nextName : "No more of this companion available"
+                            color: "#18243a"; Layout.fillWidth: true; wrapMode: Text.WordWrap
                         }
                         Label { text: "Project folder" }
                         TextField {
@@ -85,13 +93,6 @@ Pane {
                             Accessible.name: "Terminal type"
                             onCurrentTextChanged: root.configure()
                         }
-                        Label { text: "Pet color" }
-                        ComboBox {
-                            id: appearance; objectName: "petAppearance"; Layout.fillWidth: true
-                            model: ["Orange", "Yellow", "Pink", "Green", "Blue", "Purple", "White", "Blue-Green", "Grey", "Golden"]
-                            Accessible.name: "Pet color"
-                            onCurrentIndexChanged: root.configure()
-                        }
                         Label {
                             objectName: "validationStatus"
                             text: backend.validation; color: backend.canActivate ? "#236345" : "#58657a"
@@ -99,12 +100,12 @@ Pane {
                         }
                         Button {
                             objectName: "activateButton"
-                            text: "Activate session"; highlighted: true
+                            text: companion.currentIndex === 0 ? "Activate Dime" : "Activate Penny"; highlighted: true
                             Layout.fillWidth: true; enabled: backend.canActivate
                             onClicked: backend.activate()
                         }
                         Label {
-                            text: "Each pet stays reserved for its session. No terminal is launched in simulation mode."
+                            text: "Penny colors are assigned automatically. Each companion keeps its name and slot when disconnected. No terminal is launched in simulation mode."
                             font.pixelSize: 12; color: "#58657a"
                             Layout.fillWidth: true; wrapMode: Text.WordWrap
                         }

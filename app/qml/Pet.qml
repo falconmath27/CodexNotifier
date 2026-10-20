@@ -38,7 +38,7 @@ Item {
         Column {
             anchors.fill: parent; anchors.margins: 10; spacing: 3
             Text { width: parent.width; text: pet.agentName; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; font.family: "Segoe UI"; font.pixelSize: 14; font.bold: true; color: "#18243a" }
-            Text { width: parent.width; text: pet.appearance; horizontalAlignment: Text.AlignHCenter; font.family: "Segoe UI"; font.pixelSize: 12; color: "#58657a" }
+            Text { width: parent.width; text: pet.appearance === "orange" ? "Dime" : "Penny"; horizontalAlignment: Text.AlignHCenter; font.family: "Segoe UI"; font.pixelSize: 12; color: "#58657a" }
             Text { width: parent.width; text: visual.statusLabel; horizontalAlignment: Text.AlignHCenter; font.family: "Segoe UI"; font.pixelSize: 13; color: visual.accent }
         }
         Rectangle { anchors.fill: parent; anchors.margins: 3; radius: 13; color: "transparent"; border.color: "#315cce"; visible: root.activeFocus }

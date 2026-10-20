@@ -25,20 +25,12 @@ Item {
         }
         event.accepted = true
     }
-    // Static badge; sprite assets can replace this item without changing the controller.
-    Item {
-        width: 124; height: 92; anchors.horizontalCenter: parent.horizontalCenter
-        y: 5
-        Repeater {
-            model: [{x: 0, y: 24, w: 24, h: 31}, {x: 28, y: 3, w: 25, h: 33},
-                    {x: 69, y: 3, w: 25, h: 33}, {x: 99, y: 24, w: 24, h: 31},
-                    {x: 27, y: 39, w: 69, h: 51}]
-            Rectangle {
-                required property var modelData
-                x: modelData.x; y: modelData.y; width: modelData.w; height: modelData.h
-                radius: width / 2; color: "#7394dd"; border.color: "#314f8e"; border.width: 2
-            }
-        }
+    PetVisual {
+        id: visual; objectName: "petVisual"
+        anchors.horizontalCenter: parent.horizontalCenter
+        lifecycleState: pet.state
+        appearanceKey: pet.appearance
+        windowVisible: pet.visible
     }
     Rectangle {
         x: 5; y: 103; width: 190; height: 82; radius: 16
@@ -47,7 +39,7 @@ Item {
             anchors.fill: parent; anchors.margins: 10; spacing: 3
             Text { width: parent.width; text: pet.agentName; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; font.family: "Segoe UI"; font.pixelSize: 14; font.bold: true; color: "#18243a" }
             Text { width: parent.width; text: pet.appearance; horizontalAlignment: Text.AlignHCenter; font.family: "Segoe UI"; font.pixelSize: 12; color: "#58657a" }
-            Text { width: parent.width; text: pet.state; horizontalAlignment: Text.AlignHCenter; font.family: "Segoe UI"; font.pixelSize: 13; color: "#315cce" }
+            Text { width: parent.width; text: visual.statusLabel; horizontalAlignment: Text.AlignHCenter; font.family: "Segoe UI"; font.pixelSize: 13; color: visual.accent }
         }
         Rectangle { anchors.fill: parent; anchors.margins: 3; radius: 13; color: "transparent"; border.color: "#315cce"; visible: root.activeFocus }
     }
@@ -76,6 +68,7 @@ Item {
         MenuItem { text: "Open project folder"; onTriggered: { if (!pet.openProject()) { errorText.text = "Could not open the project folder."; detailsWindow.show() } } }
         MenuItem { objectName: "petReconnect"; text: "Reconnect session"; enabled: pet.state === "Disconnected"; onTriggered: pet.reconnect() }
         MenuSeparator {}
+        MenuItem { objectName: "petMotion"; text: "Animate pet"; checkable: true; checked: visual.motionEnabled; onTriggered: visual.motionEnabled = !visual.motionEnabled }
         MenuItem { objectName: "petOnTop"; text: "Always on top"; checkable: true; checked: pet.onTop; onTriggered: pet.setOnTop(!pet.onTop) }
         MenuItem { text: "Reset position"; onTriggered: pet.resetPosition() }
         MenuItem { text: "Show activation window"; onTriggered: pet.activationRequested() }

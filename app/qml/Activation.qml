@@ -85,11 +85,11 @@ Pane {
                             Accessible.name: "Terminal type"
                             onCurrentTextChanged: root.configure()
                         }
-                        Label { text: "Pet appearance" }
+                        Label { text: "Pet color" }
                         ComboBox {
                             id: appearance; objectName: "petAppearance"; Layout.fillWidth: true
-                            model: ["Cat", "Dog", "Fox", "Rabbit", "Owl", "Panda", "Bear", "Otter", "Penguin", "Turtle"]
-                            Accessible.name: "Pet appearance"
+                            model: ["Orange", "Yellow", "Pink", "Green", "Blue", "Purple", "White", "Blue-Green", "Grey", "Golden"]
+                            Accessible.name: "Pet color"
                             onCurrentIndexChanged: root.configure()
                         }
                         Label {

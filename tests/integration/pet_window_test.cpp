@@ -2,16 +2,128 @@
 #include "dimepenny/domain/agent_state_machine.h"
 #include <QQuickItem>
 #include <QScreen>
+#include <QPainter>
 #include <QtTest>
+#include <array>
 namespace {
-dimepenny::Session session(const char* id = "session-1") {
+dimepenny::Session session(const char* id = "session-1", const char* appearance = "orange") {
     return {dimepenny::SessionId{id}, dimepenny::ProjectInfo{"Example", std::filesystem::path{L"C:/Projects/Example"}},
-        dimepenny::PetIdentity{id, "Frontend <helper>", "cat", {64,128,160}}, "PowerShell", std::chrono::system_clock::now()};
+        dimepenny::PetIdentity{id, "Frontend <helper>", appearance, {64,128,160}}, "PowerShell", std::chrono::system_clock::now()};
 }
 }
 class PetWindowTest : public QObject {
     Q_OBJECT
 private slots:
+    void colorSprites()
+    {
+        constexpr std::array colors{"orange", "yellow", "pink", "green", "blue", "purple",
+                                    "white", "blue-green", "grey", "golden"};
+        for (const auto* color : colors) {
+            dimepenny::PetWindow pet(session(color, color));
+            QCOMPARE(pet.status(), QQuickView::Ready);
+            auto* visual = pet.rootObject()->findChild<QObject*>("petVisual");
+            QVERIFY(visual);
+            QCOMPARE(visual->property("selectedColor").toString(), QString::fromLatin1(color));
+            QCOMPARE(visual->property("idleFrameCount").toInt(), QString::fromLatin1(color) == "orange" ? 4 : 2);
+        }
+        dimepenny::PetWindow fallback(session("legacy", "cat"));
+        auto* visual = fallback.rootObject()->findChild<QObject*>("petVisual");
+        QVERIFY(visual);
+        QCOMPARE(visual->property("selectedColor").toString(), QString("orange"));
+    }
+
+    void visualLifecycle()
+    {
+        using namespace dimepenny;
+        auto model = session();
+        PetWindow pet(model);
+        QCOMPARE(pet.status(), QQuickView::Ready);
+        auto* visual = pet.rootObject()->findChild<QObject*>("petVisual");
+        auto* motion = pet.rootObject()->findChild<QObject*>("petMotion");
+        QVERIFY(visual); QVERIFY(motion);
+        QCOMPARE(visual->property("statusLabel").toString(), QString("Not connected"));
+        QVERIFY(!visual->property("animationRunning").toBool());
+        pet.showPet();
+        QVERIFY(QTest::qWaitForWindowExposed(&pet));
+        QImage sheet(600, 380, QImage::Format_ARGB32_Premultiplied);
+        sheet.fill(QColor("#eef1f6"));
+        int captured = 0;
+        auto capture = [&] {
+            QTest::mouseMove(&pet, QPoint(-30, -30));
+            QTest::qWait(80);
+            const auto frame = pet.grabWindow();
+            QVERIFY(!frame.isNull());
+            QPainter painter(&sheet);
+            painter.drawImage(QRect((captured % 3) * 200, (captured / 3) * 190, 200, 190), frame);
+            ++captured;
+        };
+        std::uint64_t sequence = 0;
+        auto send = [&](AgentEventType type, std::optional<ApprovalInfo> approval = std::nullopt) {
+            ++sequence;
+            const AgentEvent event{std::to_string(sequence), model.id(), type,
+                std::chrono::system_clock::now(), sequence, std::move(approval)};
+            QCOMPARE(AgentStateMachine::apply(model, event), TransitionResult::Applied);
+            pet.updateSession(model);
+        };
+        QCOMPARE(AgentStateMachine::beginConnecting(model), TransitionResult::Applied);
+        pet.updateSession(model);
+        QCOMPARE(visual->property("marker").toString(), QString("dots"));
+        QTRY_VERIFY(visual->property("animationRunning").toBool());
+        capture();
+        send(AgentEventType::SessionConnected);
+        QCOMPARE(visual->property("statusLabel").toString(), QString::fromUtf8("Active · idle"));
+        QCOMPARE(visual->property("marker").toString(), QString("smile"));
+        QVERIFY(visual->property("usesSprite").toBool());
+        QTRY_VERIFY(visual->property("animationRunning").toBool());
+        capture();
+        const auto idleFrame = visual->property("spriteFrame").toInt();
+        QTRY_VERIFY(visual->property("spriteFrame").toInt() != idleFrame);
+        send(AgentEventType::TaskStarted);
+        QCOMPARE(visual->property("marker").toString(), QString("bars"));
+        QVERIFY(visual->property("usesSprite").toBool());
+        const auto workingFrame = visual->property("spriteFrame").toInt();
+        QTRY_VERIFY(visual->property("spriteFrame").toInt() != workingFrame);
+        capture();
+        QMetaObject::invokeMethod(motion, "triggered");
+        QVERIFY(!visual->property("motionEnabled").toBool());
+        QVERIFY(!visual->property("animationRunning").toBool());
+        QCOMPARE(visual->property("statusLabel").toString(), QString("Working"));
+        QMetaObject::invokeMethod(motion, "triggered");
+        QTRY_VERIFY(visual->property("animationRunning").toBool());
+        pet.hidePet();
+        QTRY_VERIFY(!visual->property("animationRunning").toBool());
+        pet.showPet();
+        QTRY_VERIFY(visual->property("animationRunning").toBool());
+        send(AgentEventType::TaskCompleted);
+        QCOMPARE(visual->property("marker").toString(), QString("check"));
+        capture();
+        QTRY_VERIFY(!visual->property("animationRunning").toBool());
+        send(AgentEventType::TaskStarted);
+        send(AgentEventType::ApprovalRequested, ApprovalInfo{"request-1", std::nullopt});
+        QCOMPARE(visual->property("statusLabel").toString(), QString("Approval needed"));
+        QCOMPARE(visual->property("marker").toString(), QString("pause"));
+        QVERIFY(visual->property("usesSprite").toBool());
+        QTRY_VERIFY(visual->property("animationRunning").toBool());
+        const auto approvalFrame = visual->property("spriteFrame").toInt();
+        QTRY_VERIFY(visual->property("spriteFrame").toInt() != approvalFrame);
+        capture();
+        pet.updateSession(session("other"));
+        QCOMPARE(visual->property("marker").toString(), QString("pause"));
+        send(AgentEventType::ApprovalResolved, ApprovalInfo{"request-1", ApprovalDecision::Approve});
+        QCOMPARE(visual->property("marker").toString(), QString("bars"));
+        send(AgentEventType::SessionError);
+        QCOMPARE(visual->property("marker").toString(), QString("cross"));
+        capture();
+        // Interrupt the one-shot error animation with disconnect and reconnect.
+        send(AgentEventType::SessionDisconnected);
+        QCOMPARE(visual->property("statusLabel").toString(), QString("Disconnected"));
+        QVERIFY(!visual->property("animationRunning").toBool());
+        QCOMPARE(AgentStateMachine::beginConnecting(model), TransitionResult::Applied);
+        pet.updateSession(model);
+        QTRY_VERIFY(visual->property("animationRunning").toBool());
+        if (qEnvironmentVariableIsSet("DIMEPENNY_CAPTURE_UI"))
+            QVERIFY(sheet.save("pet-visual-states.png"));
+    }
     void qmlInteractions()
     {
         auto model = session(); dimepenny::PetWindow pet(model);

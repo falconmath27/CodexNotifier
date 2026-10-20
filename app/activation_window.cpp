@@ -1,6 +1,7 @@
 #include "activation_window.h"
 #include "pet_window.h"
 #include <QCloseEvent>
+#include <QColor>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
@@ -13,7 +14,11 @@ static void initializeUiResources() { Q_INIT_RESOURCE(ui); }
 namespace dimepenny {
 namespace {
 QString uniqueId() { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
-const QStringList appearances = {"Cat", "Dog", "Fox", "Rabbit", "Owl", "Panda", "Bear", "Otter", "Penguin", "Turtle"};
+const QStringList appearances = {"Orange", "Yellow", "Pink", "Green", "Blue", "Purple", "White", "Blue-Green", "Grey", "Golden"};
+const QList<QColor> appearanceColors = {
+    QColor("#ff6f2c"), QColor("#f5c84b"), QColor("#ef7fae"), QColor("#64c28a"), QColor("#5b8def"),
+    QColor("#9b6de3"), QColor("#f2f2f2"), QColor("#3db7b0"), QColor("#8b95a5"), QColor("#d4a72c")
+};
 const QStringList terminals = {"PowerShell", "Command Prompt", "Git Bash", "WSL"};
 }
 ActivationWindow::ActivationWindow()
@@ -71,8 +76,8 @@ QString ActivationWindow::validationError() const
     if (directory_.trimmed().isEmpty() || !path.isAbsolute() || !path.isDir() || !path.isReadable())
         return "Choose an existing, readable project folder.";
     if (appearance_ < 0 || appearance_ >= appearances.size() || !terminals.contains(terminal_))
-        return "Choose a terminal and pet appearance.";
-    if (appearances_.values().contains(appearance_)) return "That pet is reserved. Choose another or reconnect its session.";
+        return "Choose a terminal and pet color.";
+    if (appearances_.values().contains(appearance_)) return "That color is reserved. Choose another or reconnect its session.";
     try {
         (void)ipc::encodeJson({ipc::protocolVersion, "validation", "validation",
             QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs), "register", payload("validation")});
@@ -82,9 +87,10 @@ QString ActivationWindow::validationError() const
 QJsonObject ActivationWindow::payload(const QString& id) const
 {
     const QFileInfo path(directory_.trimmed());
+    const auto color = appearanceColors.value(appearance_, QColor("#ff6f2c"));
     return {{"project", QJsonObject{{"name", path.fileName().isEmpty() ? QString("Project") : path.fileName()}, {"directory", path.canonicalFilePath()}}},
         {"pet", QJsonObject{{"id", id}, {"name", name_.trimmed()}, {"appearanceKey", appearances.value(appearance_).toLower()},
-            {"color", QJsonObject{{"red", 64}, {"green", 128}, {"blue", 160}}}}},
+            {"color", QJsonObject{{"red", color.red()}, {"green", color.green()}, {"blue", color.blue()}}}}},
         {"terminalType", terminal_}};
 }
 void ActivationWindow::activate()

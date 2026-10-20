@@ -39,7 +39,7 @@ The proposed first release is local and Windows-first: one persistent Qt desktop
 | Local IPC server | Authenticated session binding, concurrent local sockets and liveness deadlines; see [server contracts](docs/LOCAL_SERVER.md) | Implemented component |
 | IPC protocol | Versioned JSON validation, bounded length-prefixed frames and incremental decoding; see [wire contract](docs/IPC_PROTOCOL.md) | Implemented |
 | Session registry | Up to 10 enabled sessions, duplicate protection and stable pet assignments; see [registry contracts](docs/SESSION_REGISTRY.md) | Implemented |
-| Desktop pets | Render and animate the assigned pet identities | Planned |
+| Desktop pets | QML windows with lifecycle-driven paw visuals; animal sprite artwork remains planned | Implemented |
 | Approval integration | Deliver decisions and enforce expiry through the bridge | Planned |
 | Persistence | Store session history and pet assignments in SQLite | Planned |
 | Context linking | Build a reviewable brief from explicitly selected projects | Later phase |
@@ -163,20 +163,37 @@ The suite contains 14 CTest targets covering metadata, domain models, state tran
 ./build/bridge/DimePennyBridge.exe --demo
 ```
 
-`DimePenny.exe` opens the activation interface. Enter an agent name, browse to an existing project directory, select terminal metadata and an unused pet appearance, then activate a simulated session. The UI shows validation, connection state and the 10-session capacity. A disconnected session keeps its slot and appearance; select its row to reconnect. Registrations last for the app's lifetime and are not yet persisted.
+`DimePenny.exe` opens the activation interface. Enter an agent name, browse to an existing project directory, select terminal metadata and an unused pet color, then activate a simulated session. The UI shows validation, connection state and the 10-session capacity. A disconnected session keeps its slot and color; select its row to reconnect. Registrations last for the app's lifetime and are not yet persisted.
 
-Activation uses an in-process simulated bridge over authenticated local IPC; it does not launch a terminal or control Codex. Agent names are stored as the pet's display name in the existing registration protocol. Appearance choices reserve identities; animated pets are not rendered yet.
+Activation uses an in-process simulated bridge over authenticated local IPC; it does not launch a terminal or control Codex. Agent names are stored as the pet's display name in the existing registration protocol. Color choices reserve identities, are included in the pet registration payload, and select the matching idle sprite animation.
 
 ### Desktop pets (Task 10)
 
-Each registered session gets one transparent, frameless, always-on-top tool window. This milestone renders a static paw badge with the agent name, appearance key, and live state—not an animated animal sprite.
+Each registered session gets one transparent, frameless, always-on-top tool window. It renders the selected animated pixel pet with the agent name, color key, and live state; states without dedicated sprite artwork retain the accessible paw fallback.
 
 - Drag with the left mouse button. Positions stay inside a monitor's available work area, including monitors with negative coordinates. Display/work-area changes bring misplaced pets back on screen.
 - With keyboard focus, use arrow keys to move 10 pixels or Shift + arrow for 1 pixel.
 - Hover for session information. Double-click or press Enter for a non-modal details window that updates with the session.
 - Right-click or press Shift+F10 for details, open project folder, reconnect a disconnected session, toggle always-on-top, reset position, show activation, or hide the pet.
 - Hiding or closing a pet does not deactivate its session. Choose **Show pet** on its session in activation to restore it. Reconnect preserves the existing pet window and position.
-- Positions are kept only while the app runs; persistence and animated appearances remain future tasks. Closing the activation application ends its pet windows and simulated connections.
+- Positions are kept only while the app runs; persistence remains future work. Closing the activation application ends its pet windows and simulated connections.
+
+### Pet visual states (Task 11)
+
+Validated lifecycle updates drive each session's own QML visual:
+
+| State | Visual feedback |
+| --- | --- |
+| Connecting | Blue paw with cycling dots |
+| Active / idle | Selected Orange, Yellow, Pink, Green, Blue, Purple, White, Blue-Green, Grey or Golden pet with a two- or four-frame blink loop |
+| Working | Orange pixel pet working at a laptop |
+| Completed | Teal paw with a check mark and a brief lift |
+| Approval needed | Orange pixel pet with a compact looping flame |
+| Error | Rose paw with a cross and a brief shake |
+
+Unregistered, connecting, completed, error and disconnected states retain labelled paw visuals, so color is not the only cue. Right-click → **Animate pet** disables motion without hiding state feedback; the preference lasts for that pet window's lifetime. Hidden pets stop animating. Completion/error motion plays once rather than continuously demanding attention. Color identity, window position, and session state are not changed by these visual effects.
+
+The UI tests drive the real state machine through all six states, approval resolution, disconnect/reconnect, motion toggling, hidden-window pausing, and cross-session isolation. Set `DIMEPENNY_CAPTURE_UI=1` when running the pet test to save a six-state preview as `pet-visual-states.png` in its working directory.
 
 Automated tests cover flags, alpha transparency, drag/keyboard positioning, bounds, menu actions, details updates, session isolation, ownership, and activation/reconnect integration. A real multi-monitor Windows check is still recommended for compositor stacking, taskbar avoidance, monitor unplugging, and mixed-DPI behavior.
 
@@ -184,7 +201,7 @@ Automated tests cover flags, alpha transparency, drag/keyboard positioning, boun
 
 The app uses QGuiApplication and QQuickView; it no longer links Qt Widgets. The screens in `app/qml/Activation.qml` and `app/qml/Pet.qml` are embedded in the executable through `app/ui.qrc`. Qt Quick Controls use FluentWinUI3 with an explicit light theme. The C++ presentation adapters expose properties and commands to QML; EventProcessor and the domain remain responsible for authenticated state changes.
 
-Pet windows are independent top-level tool windows owned by the activation controller, so minimizing activation does not minimize the pets. Closing activation stops the local server and hides all pets. The details window and folder picker are QML too. Sprite animation and position persistence remain separate milestones.
+Pet windows are independent top-level tool windows owned by the activation controller, so minimizing activation does not minimize the pets. Closing activation stops the local server and hides all pets. The details window and folder picker are QML too. Additional state-specific color sprite sets and position persistence remain separate milestones.
 
 For deployment, include the QML runtime and imports as well as Qt libraries. Run the matching Qt toolchain's `windeployqt` with `--qmldir app/qml` against the executable in a staging folder; a CMake install alone is not a standalone installer.
 
@@ -194,7 +211,7 @@ Run the executables from the same UCRT64 terminal used for the build so the matc
 
 ## Development status
 
-Version `0.1.0` includes domain and IPC components, a fake-session demo, the activation interface, and static desktop pet windows. Real Codex integration, animated pets, SQLite storage and approval execution remain planned.
+Version `0.1.0` includes domain and IPC components, a fake-session demo, the activation interface, and lifecycle-animated desktop paw windows. Real Codex integration, animal sprite artwork, SQLite storage and approval execution remain planned.
 
 The implemented registry enforces the 10-session limit, rejects duplicate identities, and assigns stable pet identities. Later milestones in [PLAN.md](PLAN.md) add animation, persistence, verified Codex lifecycle events, and approval handling.
 

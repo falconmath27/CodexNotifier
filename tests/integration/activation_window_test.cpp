@@ -24,8 +24,11 @@ private slots:
         path->setProperty("text", project.path()); QVERIFY(window.canActivate());
         name->setProperty("text", QString(257, 'a')); QVERIFY(!window.canActivate());
         name->setProperty("text", "Helper");
+        const QStringList colors{"Orange", "Yellow", "Pink", "Green", "Blue", "Purple", "White", "Blue-Green", "Grey", "Golden"};
         for (int i = 0; i < 10; ++i) {
-            appearance->setProperty("currentIndex", i); QVERIFY(window.canActivate());
+            appearance->setProperty("currentIndex", i);
+            QCOMPARE(appearance->property("currentText").toString(), colors.at(i));
+            QVERIFY(window.canActivate());
             QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, button->mapToScene(QPointF(button->width()/2, button->height()/2)).toPoint());
             QVERIFY(!window.canActivate());
             QTRY_VERIFY_WITH_TIMEOUT(window.connection().startsWith("Connected:"), 5000);

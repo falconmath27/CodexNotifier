@@ -1,4 +1,37 @@
 <RCC><qresource prefix="/qml">
   <file alias="Activation.qml">qml/Activation.qml</file>
   <file alias="Pet.qml">qml/Pet.qml</file>
+  <file alias="PetVisual.qml">qml/PetVisual.qml</file>
+</qresource>
+<qresource prefix="/pets">
+  <file alias="idle/orange/frame_1.png">assets/pets/idle/orange/frame_1.png</file>
+  <file alias="idle/orange/frame_2.png">assets/pets/idle/orange/frame_2.png</file>
+  <file alias="idle/orange/frame_3.png">assets/pets/idle/orange/frame_3.png</file>
+  <file alias="idle/orange/frame_4.png">assets/pets/idle/orange/frame_4.png</file>
+  <file alias="idle/yellow/frame_1.png">assets/pets/idle/yellow/frame_1.png</file>
+  <file alias="idle/yellow/frame_2.png">assets/pets/idle/yellow/frame_2.png</file>
+  <file alias="idle/pink/frame_1.png">assets/pets/idle/pink/frame_1.png</file>
+  <file alias="idle/pink/frame_2.png">assets/pets/idle/pink/frame_2.png</file>
+  <file alias="idle/green/frame_1.png">assets/pets/idle/green/frame_1.png</file>
+  <file alias="idle/green/frame_2.png">assets/pets/idle/green/frame_2.png</file>
+  <file alias="idle/blue/frame_1.png">assets/pets/idle/blue/frame_1.png</file>
+  <file alias="idle/blue/frame_2.png">assets/pets/idle/blue/frame_2.png</file>
+  <file alias="idle/purple/frame_1.png">assets/pets/idle/purple/frame_1.png</file>
+  <file alias="idle/purple/frame_2.png">assets/pets/idle/purple/frame_2.png</file>
+  <file alias="idle/white/frame_1.png">assets/pets/idle/white/frame_1.png</file>
+  <file alias="idle/white/frame_2.png">assets/pets/idle/white/frame_2.png</file>
+  <file alias="idle/blue-green/frame_1.png">assets/pets/idle/blue-green/frame_1.png</file>
+  <file alias="idle/blue-green/frame_2.png">assets/pets/idle/blue-green/frame_2.png</file>
+  <file alias="idle/grey/frame_1.png">assets/pets/idle/grey/frame_1.png</file>
+  <file alias="idle/grey/frame_2.png">assets/pets/idle/grey/frame_2.png</file>
+  <file alias="idle/golden/frame_1.png">assets/pets/idle/golden/frame_1.png</file>
+  <file alias="idle/golden/frame_2.png">assets/pets/idle/golden/frame_2.png</file>
+  <file alias="working/frame_1.png">assets/pets/working/frame_1.png</file>
+  <file alias="working/frame_2.png">assets/pets/working/frame_2.png</file>
+  <file alias="working/frame_3.png">assets/pets/working/frame_3.png</file>
+  <file alias="working/frame_4.png">assets/pets/working/frame_4.png</file>
+  <file alias="approval/frame_1.png">assets/pets/approval/frame_1.png</file>
+  <file alias="approval/frame_2.png">assets/pets/approval/frame_2.png</file>
+  <file alias="approval/frame_3.png">assets/pets/approval/frame_3.png</file>
+  <file alias="approval/frame_4.png">assets/pets/approval/frame_4.png</file>
 </qresource></RCC>
